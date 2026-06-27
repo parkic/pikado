@@ -143,7 +143,10 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // Public registration is disabled for MVP.
+        // Users are created by superadmin/admin.
+        // Features::registration(),
+
         Features::resetPasswords(),
     ],
 
