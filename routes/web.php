@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\VenueDashboardController;
 use App\Http\Controllers\VenueResourceController;
+use App\Http\Controllers\PlayerController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -43,7 +44,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     Route::get('venues/{venue:slug}/dashboard', VenueDashboardController::class)
-        ->name('venues.dashboard');
+    ->name('venues.dashboard');
+
+    // Venue Resources
     Route::get('venues/{venue:slug}/resources', [VenueResourceController::class, 'index'])
         ->name('venues.resources.index');
     Route::get('venues/{venue:slug}/resources/create', [VenueResourceController::class, 'create'])
@@ -56,6 +59,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('venues.resources.update');
     Route::delete('venues/{venue:slug}/resources/{resource}', [VenueResourceController::class, 'destroy'])
         ->name('venues.resources.destroy');
+
+
+    // Players
+    Route::get('venues/{venue:slug}/players', [PlayerController::class, 'index'])
+        ->name('venues.players.index');
 
 });
 
