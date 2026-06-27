@@ -14,6 +14,7 @@ use App\Models\Venue;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -107,6 +108,27 @@ class TournamentGroupDrawController extends Controller
             ->with('success', 'Učesnik je dodat u ' . $nextSlot['group_position'] . '.');
     }
 
+    public function destroyParticipant(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        TournamentParticipant $participant
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+        abort_unless($participant->tournament_id === $tournament->id, 404);
+
+        $groupPosition = $participant->group_position;
+
+        $participant->delete();
+
+        return redirect()
+            ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
+            ->with('success', 'Učesnik je uklonjen iz ' . $groupPosition . '.');
+    }
+
     private function storePlayerParticipant(Venue $venue, Tournament $tournament, array $nextSlot, array $validated): void
     {
         $firstName = trim($validated['first_name']);
@@ -145,7 +167,36 @@ class TournamentGroupDrawController extends Controller
                     ->where('player_id', $player->id)
                     ->exists()
             ) {
-                abort(422, 'Ovaj igrač je već dodat u turnir.');
+                throw ValidationException::withMessages([
+                    'first_name' => 'Ovaj igrač je već dodat u turnir.',
+                ]);
+            }
+
+            $slotParticipant = $tournament->participants()
+                ->withTrashed()
+                ->where('group_position', $nextSlot['group_position'])
+                ->first();
+
+            if ($slotParticipant) {
+                $slotParticipant->forceFill([
+                    'participant_type' => ParticipantType::PLAYER,
+                    'player_id' => $player->id,
+                    'team_id' => null,
+                    'tournament_group_id' => $nextSlot['group']->id,
+                    'group_position' => $nextSlot['group_position'],
+                    'status' => ParticipantStatus::ACTIVE,
+                    'withdrawn_at' => null,
+                    'withdrawn_stage' => null,
+                    'withdrawn_reason' => null,
+                ]);
+
+                if ($slotParticipant->trashed()) {
+                    $slotParticipant->restore();
+                } else {
+                    $slotParticipant->save();
+                }
+
+                return;
             }
 
             TournamentParticipant::create([
@@ -183,7 +234,36 @@ class TournamentGroupDrawController extends Controller
                     ->where('team_id', $team->id)
                     ->exists()
             ) {
-                abort(422, 'Ova ekipa je već dodata u turnir.');
+                throw ValidationException::withMessages([
+                    'team_name' => 'Ova ekipa je već dodata u turnir.',
+                ]);
+            }
+
+            $slotParticipant = $tournament->participants()
+                ->withTrashed()
+                ->where('group_position', $nextSlot['group_position'])
+                ->first();
+
+            if ($slotParticipant) {
+                $slotParticipant->forceFill([
+                    'participant_type' => ParticipantType::TEAM,
+                    'player_id' => null,
+                    'team_id' => $team->id,
+                    'tournament_group_id' => $nextSlot['group']->id,
+                    'group_position' => $nextSlot['group_position'],
+                    'status' => ParticipantStatus::ACTIVE,
+                    'withdrawn_at' => null,
+                    'withdrawn_stage' => null,
+                    'withdrawn_reason' => null,
+                ]);
+
+                if ($slotParticipant->trashed()) {
+                    $slotParticipant->restore();
+                } else {
+                    $slotParticipant->save();
+                }
+
+                return;
             }
 
             TournamentParticipant::create([

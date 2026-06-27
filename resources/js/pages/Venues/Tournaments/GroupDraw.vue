@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 type Venue = {
@@ -85,6 +85,24 @@ const participantForSlot = (
 
 const submit = () => {
     form.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/group-draw`);
+};
+
+const removeParticipant = (participant: TournamentGroupParticipant | undefined) => {
+    if (!participant) {
+        return;
+    }
+
+    const confirmed = window.confirm(
+        `Da li želiš da ukloniš ${participant.display_name} iz ${participant.group_position}?`,
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.delete(
+        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/group-draw/participants/${participant.id}`,
+    );
 };
 </script>
 
@@ -337,12 +355,22 @@ const submit = () => {
                                     {{ group.name }}{{ slotNumber }}
                                 </span>
 
-                                <span
+                                <div
                                     v-if="participantForSlot(group, slotNumber)"
-                                    class="text-right"
+                                    class="flex items-center gap-2 text-right"
                                 >
-                                    {{ participantForSlot(group, slotNumber)?.display_name }}
-                                </span>
+                                    <span>
+                                        {{ participantForSlot(group, slotNumber)?.display_name }}
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        class="text-xs font-medium text-red-600 hover:underline"
+                                        @click="removeParticipant(participantForSlot(group, slotNumber))"
+                                    >
+                                        Ukloni
+                                    </button>
+                                </div>
 
                                 <span
                                     v-else
