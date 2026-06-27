@@ -164,4 +164,24 @@ class PlayerController extends Controller
             ->route('venues.players.index', ['venue' => $venue->slug])
             ->with('success', 'Igrač je uspešno izmenjen.');
     }
+
+    public function destroy(Request $request, Venue $venue, Player $player)
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+        abort_unless($player->venue_id === $venue->id, 404);
+
+        $player->delete();
+
+        return redirect()
+            ->route('venues.players.index', ['venue' => $venue->slug])
+            ->with('success', 'Igrač je uspešno obrisan.');
+    }
 }

@@ -72,6 +72,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('venues.players.edit');
     Route::put('venues/{venue:slug}/players/{player}', [PlayerController::class, 'update'])
         ->name('venues.players.update');
+    Route::delete('venues/{venue:slug}/players/{player}', [PlayerController::class, 'destroy'])
+        ->name('venues.players.destroy');
 
 });
 
