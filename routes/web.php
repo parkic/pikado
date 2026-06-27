@@ -79,6 +79,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Teams
     Route::get('venues/{venue:slug}/teams', [TeamController::class, 'index'])
         ->name('venues.teams.index');
+    Route::get('venues/{venue:slug}/teams/create', [TeamController::class, 'create'])
+        ->name('venues.teams.create');
+    Route::post('venues/{venue:slug}/teams', [TeamController::class, 'store'])
+        ->name('venues.teams.store');
 
 });
 

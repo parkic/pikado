@@ -41,4 +41,54 @@ class TeamController extends Controller
             'teams' => $teams,
         ]);
     }
+
+    public function create(Request $request, Venue $venue): Response
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+
+        return Inertia::render('Venues/Teams/Create', [
+            'venue' => [
+                'id' => $venue->id,
+                'name' => $venue->name,
+                'slug' => $venue->slug,
+            ],
+        ]);
+    }
+
+    public function store(Request $request, Venue $venue)
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $venue->teams()->create([
+            'name' => $validated['name'],
+            'notes' => $validated['notes'],
+            'is_active' => $validated['is_active'],
+        ]);
+
+        return redirect()
+            ->route('venues.teams.index', ['venue' => $venue->slug])
+            ->with('success', 'Tim je uspešno dodat.');
+    }
 }
