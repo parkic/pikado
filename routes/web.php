@@ -44,21 +44,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('venues/{venue:slug}/dashboard', VenueDashboardController::class)
         ->name('venues.dashboard');
-
     Route::get('venues/{venue:slug}/resources', [VenueResourceController::class, 'index'])
         ->name('venues.resources.index');
-
     Route::get('venues/{venue:slug}/resources/create', [VenueResourceController::class, 'create'])
         ->name('venues.resources.create');
-
     Route::post('venues/{venue:slug}/resources', [VenueResourceController::class, 'store'])
         ->name('venues.resources.store');
-
     Route::get('venues/{venue:slug}/resources/{resource}/edit', [VenueResourceController::class, 'edit'])
         ->name('venues.resources.edit');
-
     Route::put('venues/{venue:slug}/resources/{resource}', [VenueResourceController::class, 'update'])
         ->name('venues.resources.update');
+    Route::delete('venues/{venue:slug}/resources/{resource}', [VenueResourceController::class, 'destroy'])
+        ->name('venues.resources.destroy');
 
 });
 

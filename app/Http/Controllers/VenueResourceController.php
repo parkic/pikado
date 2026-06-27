@@ -168,4 +168,24 @@ class VenueResourceController extends Controller
             ->route('venues.resources.index', ['venue' => $venue->slug])
             ->with('success', 'Resource je uspešno izmenjen.');
     }
+
+    public function destroy(Request $request, Venue $venue, VenueResource $resource)
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+        abort_unless($resource->venue_id === $venue->id, 404);
+
+        $resource->delete();
+
+        return redirect()
+            ->route('venues.resources.index', ['venue' => $venue->slug])
+            ->with('success', 'Resource je uspešno obrisan.');
+    }
 }
