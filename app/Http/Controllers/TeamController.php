@@ -151,4 +151,24 @@ class TeamController extends Controller
             ->route('venues.teams.index', ['venue' => $venue->slug])
             ->with('success', 'Tim je uspešno izmenjen.');
     }
+
+    public function destroy(Request $request, Venue $venue, Team $team)
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+        abort_unless($team->venue_id === $venue->id, 404);
+
+        $team->delete();
+
+        return redirect()
+            ->route('venues.teams.index', ['venue' => $venue->slug])
+            ->with('success', 'Tim je uspešno obrisan.');
+    }
 }

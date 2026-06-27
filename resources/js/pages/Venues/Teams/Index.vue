@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 type Venue = {
     id: number;
@@ -14,10 +14,18 @@ type Team = {
     is_active: boolean;
 };
 
-defineProps<{
+const props = defineProps<{
     venue: Venue;
     teams: Team[];
 }>();
+
+const deleteTeam = (team: Team) => {
+    if (!confirm(`Da li sigurno želiš da obrišeš tim "${team.name}"?`)) {
+        return;
+    }
+
+    router.delete(`/venues/${props.venue.slug}/teams/${team.id}`);
+};
 
 defineOptions({
     layout: {
@@ -113,12 +121,22 @@ defineOptions({
                             </td>
 
                             <td class="px-4 py-3 text-right">
-                                <Link
-                                    :href="`/venues/${venue.slug}/teams/${team.id}/edit`"
-                                    class="inline-flex items-center justify-center rounded-md border border-sidebar-border/70 px-3 py-1.5 text-sm font-medium hover:bg-muted dark:border-sidebar-border"
-                                >
-                                    Izmeni
-                                </Link>
+                                <div class="flex justify-end gap-2">
+                                    <Link
+                                        :href="`/venues/${venue.slug}/teams/${team.id}/edit`"
+                                        class="inline-flex items-center justify-center rounded-md border border-sidebar-border/70 px-3 py-1.5 text-sm font-medium hover:bg-muted dark:border-sidebar-border"
+                                    >
+                                        Izmeni
+                                    </Link>
+
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center justify-center rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+                                        @click="deleteTeam(team)"
+                                    >
+                                        Obriši
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     </tbody>
