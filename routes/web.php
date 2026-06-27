@@ -68,6 +68,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('venues.players.create');
     Route::post('venues/{venue:slug}/players', [PlayerController::class, 'store'])
         ->name('venues.players.store');
+    Route::get('venues/{venue:slug}/players/{player}/edit', [PlayerController::class, 'edit'])
+        ->name('venues.players.edit');
+    Route::put('venues/{venue:slug}/players/{player}', [PlayerController::class, 'update'])
+        ->name('venues.players.update');
 
 });
 
