@@ -15,13 +15,7 @@ class PlayerController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         $players = $venue->players()
             ->orderBy('first_name')
@@ -51,13 +45,7 @@ class PlayerController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         return Inertia::render('Venues/Players/Create', [
             'venue' => [
@@ -72,13 +60,7 @@ class PlayerController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
@@ -105,13 +87,7 @@ class PlayerController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($player->venue_id === $venue->id, 404);
 
         return Inertia::render('Venues/Players/Edit', [
@@ -135,13 +111,7 @@ class PlayerController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($player->venue_id === $venue->id, 404);
 
         $validated = $request->validate([
@@ -169,13 +139,7 @@ class PlayerController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($player->venue_id === $venue->id, 404);
 
         $player->delete();

@@ -15,13 +15,7 @@ class TeamController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         $teams = $venue->teams()
             ->orderBy('name')
@@ -48,13 +42,7 @@ class TeamController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         return Inertia::render('Venues/Teams/Create', [
             'venue' => [
@@ -69,13 +57,7 @@ class TeamController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -98,13 +80,7 @@ class TeamController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($team->venue_id === $venue->id, 404);
 
         return Inertia::render('Venues/Teams/Edit', [
@@ -126,13 +102,7 @@ class TeamController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($team->venue_id === $venue->id, 404);
 
         $validated = $request->validate([
@@ -156,13 +126,7 @@ class TeamController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($team->venue_id === $venue->id, 404);
 
         $team->delete();

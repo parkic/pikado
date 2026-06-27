@@ -13,13 +13,7 @@ class VenueDashboardController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         $venue->load([
             'venueResources' => fn ($query) => $query

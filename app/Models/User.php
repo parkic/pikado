@@ -14,6 +14,8 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+use App\Models\Venue;
+
 /**
  * @property int $id
  * @property string $name
@@ -50,5 +52,17 @@ class User extends Authenticatable
     public function venueUsers(): HasMany
     {
         return $this->hasMany(VenueUser::class);
+    }
+
+    public function canAccessVenue(Venue $venue): bool
+    {
+        if ($this->global_role === UserGlobalRole::SUPERADMIN) {
+            return true;
+        }
+
+        return $this->venueUsers()
+            ->where('venue_id', $venue->id)
+            ->where('is_active', true)
+            ->exists();
     }
 }

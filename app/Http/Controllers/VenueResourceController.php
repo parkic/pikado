@@ -16,13 +16,7 @@ class VenueResourceController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         $resources = $venue->venueResources()
             ->orderBy('sort_order')
@@ -50,13 +44,7 @@ class VenueResourceController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         return Inertia::render('Venues/Resources/Create', [
             'venue' => [
@@ -76,13 +64,7 @@ class VenueResourceController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -107,13 +89,7 @@ class VenueResourceController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($resource->venue_id === $venue->id, 404);
 
         return Inertia::render('Venues/Resources/Edit', [
@@ -141,13 +117,7 @@ class VenueResourceController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($resource->venue_id === $venue->id, 404);
 
         $validated = $request->validate([
@@ -173,13 +143,7 @@ class VenueResourceController extends Controller
     {
         $user = $request->user();
 
-        $hasVenueAccess = $user->global_role?->value === 'superadmin'
-            || $user->venueUsers()
-                ->where('venue_id', $venue->id)
-                ->where('is_active', true)
-                ->exists();
-
-        abort_unless($hasVenueAccess, 403);
+        abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($resource->venue_id === $venue->id, 404);
 
         $resource->delete();
