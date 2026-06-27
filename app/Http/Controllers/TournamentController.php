@@ -107,6 +107,56 @@ class TournamentController extends Controller
         ]);
     }
 
+    public function show(Request $request, Venue $venue, Tournament $tournament): Response
+    {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        $tournament->load([
+            'createdBy',
+            'resources' => fn ($query) => $query
+                ->orderBy('sort_order')
+                ->orderBy('name'),
+        ]);
+
+        return Inertia::render('Venues/Tournaments/Show', [
+            'venue' => [
+                'id' => $venue->id,
+                'name' => $venue->name,
+                'slug' => $venue->slug,
+            ],
+            'tournament' => [
+                'id' => $tournament->id,
+                'name' => $tournament->name,
+                'slug' => $tournament->slug,
+                'public_code' => $tournament->public_code,
+                'game_type' => $tournament->game_type->value,
+                'game_type_label' => $this->gameTypeLabel($tournament->game_type),
+                'match_mode' => $tournament->match_mode->value,
+                'match_mode_label' => $this->matchModeLabel($tournament->match_mode),
+                'status' => $tournament->status->value,
+                'status_label' => $this->statusLabel($tournament->status),
+                'group_rounds' => $tournament->group_rounds->value,
+                'knockout_size' => $tournament->knockout_size,
+                'public_enabled' => $tournament->public_enabled,
+                'scoring_mode' => $tournament->scoring_mode->value,
+                'settings' => $tournament->settings ?? [],
+                'created_by' => $tournament->createdBy?->name,
+                'created_at' => $tournament->created_at?->format('d.m.Y. H:i'),
+                'resources' => $tournament->resources->map(fn ($resource) => [
+                    'id' => $resource->id,
+                    'name' => $resource->name,
+                    'type' => $resource->type->value,
+                    'type_label' => $this->resourceTypeLabel($resource->type->value),
+                    'sort_order' => $resource->sort_order,
+                    'is_active' => $resource->is_active,
+                ]),
+            ],
+        ]);
+    }
+
     public function store(Request $request, Venue $venue): RedirectResponse
     {
         $user = $request->user();

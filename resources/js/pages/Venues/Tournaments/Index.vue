@@ -134,6 +134,9 @@ const statusBadgeClasses = (status: string): string => {
                                 <th class="px-4 py-3 font-medium">
                                     Kreiran
                                 </th>
+                                <th class="px-4 py-3 font-medium">
+                                    Akcije
+                                </th>
                             </tr>
                         </thead>
 
@@ -184,6 +187,14 @@ const statusBadgeClasses = (status: string): string => {
 
                                 <td class="px-4 py-3 text-muted-foreground">
                                     {{ tournament.created_at ?? '-' }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    <Link
+                                        :href="`/venues/${venue.slug}/tournaments/${tournament.slug}`"
+                                        class="text-sm font-medium text-primary hover:underline"
+                                    >
+                                        Otvori
+                                    </Link>
                                 </td>
                             </tr>
                         </tbody>

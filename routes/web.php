@@ -96,9 +96,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('venues.tournaments.index');
     Route::get('venues/{venue:slug}/tournaments/create', [TournamentController::class, 'create'])
         ->name('venues.tournaments.create');
-
     Route::post('venues/{venue:slug}/tournaments', [TournamentController::class, 'store'])
         ->name('venues.tournaments.store');
+    Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
+        ->name('venues.tournaments.show');
 
 });
 
