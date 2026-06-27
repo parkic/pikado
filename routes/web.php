@@ -114,6 +114,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('venues/{venue:slug}/tournaments/{tournament:slug}/group-draw/participants/{participant}', [TournamentGroupDrawController::class, 'destroyParticipant'])
         ->scopeBindings()
         ->name('venues.tournaments.group_draw.participants.destroy');
+    Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/group-draw/participants/{participant}/edit', [TournamentGroupDrawController::class, 'editParticipant'])
+        ->scopeBindings()
+        ->name('venues.tournaments.group_draw.participants.edit');
+    Route::put('venues/{venue:slug}/tournaments/{tournament:slug}/group-draw/participants/{participant}', [TournamentGroupDrawController::class, 'updateParticipant'])
+        ->scopeBindings()
+        ->name('venues.tournaments.group_draw.participants.update');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 

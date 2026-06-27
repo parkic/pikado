@@ -129,6 +129,99 @@ class TournamentGroupDrawController extends Controller
             ->with('success', 'Učesnik je uklonjen iz ' . $groupPosition . '.');
     }
 
+    public function editParticipant(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        TournamentParticipant $participant
+    ): Response {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+        abort_unless($participant->tournament_id === $tournament->id, 404);
+
+        $participant->load(['player', 'team']);
+
+        return Inertia::render('Venues/Tournaments/EditGroupDrawParticipant', [
+            'venue' => [
+                'id' => $venue->id,
+                'name' => $venue->name,
+                'slug' => $venue->slug,
+            ],
+            'tournament' => [
+                'id' => $tournament->id,
+                'name' => $tournament->name,
+                'slug' => $tournament->slug,
+                'match_mode' => $tournament->match_mode->value,
+                'match_mode_label' => $tournament->match_mode === MatchMode::SINGLES ? '1v1' : '2v2',
+            ],
+            'participant' => [
+                'id' => $participant->id,
+                'participant_type' => $participant->participant_type->value,
+                'group_position' => $participant->group_position,
+                'display_name' => $this->participantDisplayName($participant),
+                'player' => $participant->player ? [
+                    'id' => $participant->player->id,
+                    'first_name' => $participant->player->first_name,
+                    'last_name' => $participant->player->last_name,
+                    'nickname' => $participant->player->nickname,
+                ] : null,
+                'team' => $participant->team ? [
+                    'id' => $participant->team->id,
+                    'name' => $participant->team->name,
+                ] : null,
+            ],
+        ]);
+    }
+
+    public function updateParticipant(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        TournamentParticipant $participant
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+        abort_unless($participant->tournament_id === $tournament->id, 404);
+
+        $participant->load(['player', 'team']);
+
+        if ($participant->participant_type === ParticipantType::PLAYER) {
+            abort_unless($participant->player !== null, 404);
+
+            $validated = $request->validate([
+                'first_name' => ['required', 'string', 'max:255'],
+                'last_name' => ['required', 'string', 'max:255'],
+                'nickname' => ['nullable', 'string', 'max:255'],
+            ]);
+
+            $participant->player->update([
+                'first_name' => trim($validated['first_name']),
+                'last_name' => trim($validated['last_name']),
+                'nickname' => isset($validated['nickname']) && trim($validated['nickname']) !== ''
+                    ? trim($validated['nickname'])
+                    : null,
+            ]);
+        } else {
+            abort_unless($participant->team !== null, 404);
+
+            $validated = $request->validate([
+                'team_name' => ['required', 'string', 'max:255'],
+            ]);
+
+            $participant->team->update([
+                'name' => trim($validated['team_name']),
+            ]);
+        }
+
+        return redirect()
+            ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
+            ->with('success', 'Učesnik je izmenjen.');
+    }
+
     private function storePlayerParticipant(Venue $venue, Tournament $tournament, array $nextSlot, array $validated): void
     {
         $firstName = trim($validated['first_name']);

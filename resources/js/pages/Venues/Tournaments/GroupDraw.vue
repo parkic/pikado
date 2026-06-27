@@ -363,6 +363,13 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                                         {{ participantForSlot(group, slotNumber)?.display_name }}
                                     </span>
 
+                                    <Link
+                                        :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/group-draw/participants/${participantForSlot(group, slotNumber)?.id}/edit`"
+                                        class="text-xs font-medium text-primary hover:underline"
+                                    >
+                                        Izmeni
+                                    </Link>
+
                                     <button
                                         type="button"
                                         class="text-xs font-medium text-red-600 hover:underline"
