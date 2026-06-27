@@ -8,6 +8,7 @@ use App\Http\Controllers\VenueResourceController;
 use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TournamentController;
+use App\Http\Controllers\TournamentGroupDrawController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -104,6 +105,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/groups/setup', [TournamentController::class, 'storeGroups'])
         ->scopeBindings()
         ->name('venues.tournaments.groups.store');
+    Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/group-draw', [TournamentGroupDrawController::class, 'show'])
+        ->scopeBindings()
+        ->name('venues.tournaments.group_draw.show');
+    Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/group-draw', [TournamentGroupDrawController::class, 'store'])
+        ->scopeBindings()
+        ->name('venues.tournaments.group_draw.store');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 

@@ -144,6 +144,13 @@ const participantForSlot = (
                 >
                     Setup grupa
                 </Link>
+
+                <Link
+                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/group-draw`"
+                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                >
+                    Group Draw
+                </Link>
             </div>
         </div>
 
