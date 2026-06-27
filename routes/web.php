@@ -4,6 +4,7 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\VenueDashboardController;
+use App\Http\Controllers\VenueResourceController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -43,6 +44,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('venues/{venue:slug}/dashboard', VenueDashboardController::class)
         ->name('venues.dashboard');
+
+    Route::get('venues/{venue:slug}/resources', [VenueResourceController::class, 'index'])
+        ->name('venues.resources.index');
+
+
 });
 
 require __DIR__.'/settings.php';
