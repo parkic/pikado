@@ -44,4 +44,58 @@ class PlayerController extends Controller
             'players' => $players,
         ]);
     }
+
+    public function create(Request $request, Venue $venue): Response
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+
+        return Inertia::render('Venues/Players/Create', [
+            'venue' => [
+                'id' => $venue->id,
+                'name' => $venue->name,
+                'slug' => $venue->slug,
+            ],
+        ]);
+    }
+
+    public function store(Request $request, Venue $venue)
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'nickname' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string'],
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $venue->players()->create([
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
+            'nickname' => $validated['nickname'],
+            'notes' => $validated['notes'],
+            'is_active' => $validated['is_active'],
+        ]);
+
+        return redirect()
+            ->route('venues.players.index', ['venue' => $venue->slug])
+            ->with('success', 'Igrač je uspešno dodat.');
+    }
 }
