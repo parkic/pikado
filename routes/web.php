@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\VenueDashboardController;
 use App\Http\Controllers\VenueResourceController;
 use App\Http\Controllers\PlayerController;
+use App\Http\Controllers\TeamController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -74,6 +75,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('venues.players.update');
     Route::delete('venues/{venue:slug}/players/{player}', [PlayerController::class, 'destroy'])
         ->name('venues.players.destroy');
+
+    // Teams
+    Route::get('venues/{venue:slug}/teams', [TeamController::class, 'index'])
+        ->name('venues.teams.index');
 
 });
 
