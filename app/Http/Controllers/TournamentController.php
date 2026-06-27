@@ -121,6 +121,11 @@ class TournamentController extends Controller
                 ->orderBy('name'),
         ]);
 
+        $tournament->loadCount([
+            'groups',
+            'participants',
+        ]);
+
         return Inertia::render('Venues/Tournaments/Show', [
             'venue' => [
                 'id' => $venue->id,
@@ -145,6 +150,8 @@ class TournamentController extends Controller
                 'settings' => $tournament->settings ?? [],
                 'created_by' => $tournament->createdBy?->name,
                 'created_at' => $tournament->created_at?->format('d.m.Y. H:i'),
+                'groups_count' => $tournament->groups_count,
+                'participants_count' => $tournament->participants_count,
                 'resources' => $tournament->resources->map(fn ($resource) => [
                     'id' => $resource->id,
                     'name' => $resource->name,

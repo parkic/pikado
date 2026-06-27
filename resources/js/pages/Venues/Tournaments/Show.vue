@@ -43,6 +43,8 @@ type Tournament = {
     settings: TournamentSettings;
     created_by: string | null;
     created_at: string | null;
+    groups_count: number;
+    participants_count: number;
     resources: TournamentResource[];
 };
 
@@ -121,7 +123,7 @@ const statusBadgeClasses = (status: string): string => {
             </div>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
                 <p class="text-sm text-muted-foreground">
                     Igra
@@ -139,6 +141,26 @@ const statusBadgeClasses = (status: string): string => {
 
                 <p class="mt-2 text-lg font-medium">
                     {{ tournament.match_mode_label }}
+                </p>
+            </div>
+
+            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                <p class="text-sm text-muted-foreground">
+                    Grupe
+                </p>
+
+                <p class="mt-2 text-lg font-medium">
+                    {{ tournament.groups_count }}
+                </p>
+            </div>
+
+            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                <p class="text-sm text-muted-foreground">
+                    Učesnici
+                </p>
+
+                <p class="mt-2 text-lg font-medium">
+                    {{ tournament.participants_count }}
                 </p>
             </div>
 
