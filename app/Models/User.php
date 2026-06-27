@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int $id
@@ -44,5 +45,10 @@ class User extends Authenticatable
             'password' => 'hashed',
             'global_role' => UserGlobalRole::class,
         ];
+    }
+
+    public function venueUsers(): HasMany
+    {
+        return $this->hasMany(VenueUser::class);
     }
 }
