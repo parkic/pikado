@@ -83,6 +83,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('venues.teams.create');
     Route::post('venues/{venue:slug}/teams', [TeamController::class, 'store'])
         ->name('venues.teams.store');
+    Route::get('venues/{venue:slug}/teams/{team}/edit', [TeamController::class, 'edit'])
+        ->name('venues.teams.edit');
+    Route::put('venues/{venue:slug}/teams/{team}', [TeamController::class, 'update'])
+        ->name('venues.teams.update');
 
 });
 
