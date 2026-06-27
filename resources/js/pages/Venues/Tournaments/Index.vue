@@ -80,13 +80,12 @@ const statusBadgeClasses = (status: string): string => {
                     Nazad na dashboard
                 </Link>
 
-                <button
-                    type="button"
-                    disabled
-                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-50"
+                <Link
+                    :href="`/venues/${venue.slug}/tournaments/create`"
+                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
                 >
-                    Novi turnir uskoro
-                </button>
+                    Novi turnir
+                </Link>
             </div>
         </div>
 
