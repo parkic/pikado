@@ -113,13 +113,12 @@ const statusBadgeClasses = (status: string): string => {
                     Nazad na turnire
                 </Link>
 
-                <button
-                    type="button"
-                    disabled
-                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-50"
+                <Link
+                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/groups/setup`"
+                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
                 >
-                    Setup uskoro
-                </button>
+                    Setup grupa
+                </Link>
             </div>
         </div>
 
@@ -261,6 +260,16 @@ const statusBadgeClasses = (status: string): string => {
                         <span class="font-medium">
                             {{ tournament.group_rounds === 'single' ? 'Jednokružno' : 'Dvokružno' }}
                         </span>
+                    </div>
+
+                    <div class="flex justify-between gap-4">
+                        <span class="text-muted-foreground">Broj grupa</span>
+                        <span class="font-medium">{{ tournament.settings.group_count ?? '-' }}</span>
+                    </div>
+
+                    <div class="flex justify-between gap-4">
+                        <span class="text-muted-foreground">Mesta po grupi</span>
+                        <span class="font-medium">{{ tournament.settings.group_size ?? '-' }}</span>
                     </div>
 
                     <div class="flex justify-between gap-4">

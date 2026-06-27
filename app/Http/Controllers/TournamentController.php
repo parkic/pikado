@@ -7,9 +7,6 @@ use App\Enums\GroupRounds;
 use App\Enums\MatchMode;
 use App\Enums\ScoringMode;
 use App\Enums\TournamentStatus;
-use App\Models\Tournament;
-use App\Models\TournamentResource;
-use App\Models\Venue;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +14,11 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+
+use App\Models\Tournament;
+use App\Models\TournamentResource;
+use App\Models\Venue;
+use App\Models\TournamentGroup;
 
 class TournamentController extends Controller
 {
@@ -162,6 +164,116 @@ class TournamentController extends Controller
                 ]),
             ],
         ]);
+    }
+
+    public function setupGroups(Request $request, Venue $venue, Tournament $tournament): Response
+    {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        $tournament->load([
+            'groups' => fn ($query) => $query
+                ->orderBy('sort_order')
+                ->orderBy('name'),
+        ]);
+
+        return Inertia::render('Venues/Tournaments/SetupGroups', [
+            'venue' => [
+                'id' => $venue->id,
+                'name' => $venue->name,
+                'slug' => $venue->slug,
+            ],
+            'tournament' => [
+                'id' => $tournament->id,
+                'name' => $tournament->name,
+                'slug' => $tournament->slug,
+                'status' => $tournament->status->value,
+                'status_label' => $this->statusLabel($tournament->status),
+                'settings' => $tournament->settings ?? [],
+                'participants_count' => $tournament->participants()->count(),
+                'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
+                    'id' => $group->id,
+                    'name' => $group->name,
+                    'sort_order' => $group->sort_order,
+                ]),
+            ],
+        ]);
+    }
+
+    public function storeGroups(Request $request, Venue $venue, Tournament $tournament): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        if ($tournament->participants()->exists()) {
+            return back()
+                ->withErrors([
+                    'group_count' => 'Grupe ne mogu da se menjaju kada turnir već ima učesnike.',
+                ])
+                ->withInput();
+        }
+
+        $validated = $request->validate([
+            'group_count' => ['required', 'integer', 'min:1', 'max:32'],
+            'group_size' => ['required', 'integer', 'min:2', 'max:16'],
+        ]);
+
+        DB::transaction(function () use ($tournament, $validated): void {
+            $groupCount = (int) $validated['group_count'];
+            $groupSize = (int) $validated['group_size'];
+
+            $desiredGroupNames = collect(range(1, $groupCount))
+                ->map(fn (int $index) => $this->groupNameFromIndex($index));
+
+            $existingGroups = $tournament->groups()
+                ->withTrashed()
+                ->get()
+                ->keyBy('name');
+
+            foreach ($desiredGroupNames as $index => $groupName) {
+                $group = $existingGroups->get($groupName);
+
+                if ($group) {
+                    $group->sort_order = $index + 1;
+
+                    if ($group->trashed()) {
+                        $group->restore();
+                    }
+
+                    $group->save();
+
+                    continue;
+                }
+
+                TournamentGroup::create([
+                    'tournament_id' => $tournament->id,
+                    'name' => $groupName,
+                    'sort_order' => $index + 1,
+                ]);
+            }
+
+            $tournament->groups()
+                ->whereNotIn('name', $desiredGroupNames->all())
+                ->get()
+                ->each(fn (TournamentGroup $group) => $group->delete());
+
+            $settings = $tournament->settings ?? [];
+
+            $settings['group_count'] = $groupCount;
+            $settings['group_size'] = $groupSize;
+
+            $tournament->update([
+                'settings' => $settings,
+            ]);
+        });
+
+        return redirect()
+            ->route('venues.tournaments.show', [$venue, $tournament])
+            ->with('success', 'Grupe su sačuvane.');
     }
 
     public function store(Request $request, Venue $venue): RedirectResponse
@@ -332,5 +444,19 @@ class TournamentController extends Controller
             'other' => 'Ostalo',
             default => $type,
         };
+    }
+
+    private function groupNameFromIndex(int $index): string
+    {
+        $name = '';
+
+        while ($index > 0) {
+            $index--;
+
+            $name = chr(65 + ($index % 26)) . $name;
+            $index = intdiv($index, 26);
+        }
+
+        return $name;
     }
 }
