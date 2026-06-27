@@ -54,6 +54,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('venues/{venue:slug}/resources', [VenueResourceController::class, 'store'])
         ->name('venues.resources.store');
 
+    Route::get('venues/{venue:slug}/resources/{resource}/edit', [VenueResourceController::class, 'edit'])
+        ->name('venues.resources.edit');
+
+    Route::put('venues/{venue:slug}/resources/{resource}', [VenueResourceController::class, 'update'])
+        ->name('venues.resources.update');
+
 });
 
 require __DIR__.'/settings.php';

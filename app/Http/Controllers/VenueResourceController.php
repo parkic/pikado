@@ -8,6 +8,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 use App\Enums\ResourceType;
+use App\Models\VenueResource;
 
 class VenueResourceController extends Controller
 {
@@ -100,5 +101,71 @@ class VenueResourceController extends Controller
         return redirect()
             ->route('venues.resources.index', ['venue' => $venue->slug])
             ->with('success', 'Resource je uspešno dodat.');
+    }
+
+    public function edit(Request $request, Venue $venue, VenueResource $resource): Response
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+        abort_unless($resource->venue_id === $venue->id, 404);
+
+        return Inertia::render('Venues/Resources/Edit', [
+            'venue' => [
+                'id' => $venue->id,
+                'name' => $venue->name,
+                'slug' => $venue->slug,
+            ],
+            'resource' => [
+                'id' => $resource->id,
+                'name' => $resource->name,
+                'type' => $resource->type->value,
+                'sort_order' => $resource->sort_order,
+                'is_active' => $resource->is_active,
+            ],
+            'resourceTypes' => collect(ResourceType::cases())
+                ->map(fn ($type) => [
+                    'label' => $type->value,
+                    'value' => $type->value,
+                ]),
+        ]);
+    }
+
+    public function update(Request $request, Venue $venue, VenueResource $resource)
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+        abort_unless($resource->venue_id === $venue->id, 404);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'type' => ['required', 'string', 'in:dart_board,beer_pong_table,other'],
+            'sort_order' => ['required', 'integer', 'min:0'],
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $resource->update([
+            'name' => $validated['name'],
+            'type' => ResourceType::from($validated['type']),
+            'sort_order' => $validated['sort_order'],
+            'is_active' => $validated['is_active'],
+        ]);
+
+        return redirect()
+            ->route('venues.resources.index', ['venue' => $venue->slug])
+            ->with('success', 'Resource je uspešno izmenjen.');
     }
 }
