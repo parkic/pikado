@@ -77,7 +77,24 @@ defineOptions({
             </div>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-3">
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Link
+                :href="`/venues/${venue.slug}/tournaments`"
+                class="rounded-xl border border-sidebar-border/70 p-4 transition hover:bg-muted dark:border-sidebar-border"
+            >
+                <p class="text-sm text-muted-foreground">
+                    Vođenje turnira
+                </p>
+
+                <h2 class="mt-2 text-lg font-medium">
+                    Turniri
+                </h2>
+
+                <p class="mt-1 text-sm text-muted-foreground">
+                    Draft, aktivni i završeni turniri za ovaj lokal.
+                </p>
+            </Link>
+
             <Link
                 :href="`/venues/${venue.slug}/resources`"
                 class="rounded-xl border border-sidebar-border/70 p-4 transition hover:bg-muted dark:border-sidebar-border"

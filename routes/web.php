@@ -7,6 +7,7 @@ use App\Http\Controllers\VenueDashboardController;
 use App\Http\Controllers\VenueResourceController;
 use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\TournamentController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -89,6 +90,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('venues.teams.update');
     Route::delete('venues/{venue:slug}/teams/{team}', [TeamController::class, 'destroy'])
         ->name('venues.teams.destroy');
+
+    // Tournaments
+    Route::get('venues/{venue:slug}/tournaments', [TournamentController::class, 'index'])
+        ->name('venues.tournaments.index');
 
 });
 
