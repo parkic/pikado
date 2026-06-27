@@ -19,6 +19,7 @@ use App\Models\Tournament;
 use App\Models\TournamentResource;
 use App\Models\Venue;
 use App\Models\TournamentGroup;
+use App\Models\TournamentParticipant;
 
 class TournamentController extends Controller
 {
@@ -121,6 +122,14 @@ class TournamentController extends Controller
             'resources' => fn ($query) => $query
                 ->orderBy('sort_order')
                 ->orderBy('name'),
+            'groups' => fn ($query) => $query
+                ->orderBy('sort_order')
+                ->orderBy('name'),
+            'groups.participants' => fn ($query) => $query
+                ->orderBy('group_position')
+                ->orderBy('id'),
+            'groups.participants.player',
+            'groups.participants.team',
         ]);
 
         $tournament->loadCount([
@@ -154,6 +163,18 @@ class TournamentController extends Controller
                 'created_at' => $tournament->created_at?->format('d.m.Y. H:i'),
                 'groups_count' => $tournament->groups_count,
                 'participants_count' => $tournament->participants_count,
+                'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
+                    'id' => $group->id,
+                    'name' => $group->name,
+                    'sort_order' => $group->sort_order,
+                    'participants' => $group->participants->map(fn (TournamentParticipant $participant) => [
+                        'id' => $participant->id,
+                        'participant_type' => $participant->participant_type->value,
+                        'group_position' => $participant->group_position,
+                        'status' => $participant->status->value,
+                        'display_name' => $this->participantDisplayName($participant),
+                    ]),
+                ]),
                 'resources' => $tournament->resources->map(fn ($resource) => [
                     'id' => $resource->id,
                     'name' => $resource->name,
@@ -458,5 +479,24 @@ class TournamentController extends Controller
         }
 
         return $name;
+    }
+
+    private function participantDisplayName(TournamentParticipant $participant): string
+    {
+        if ($participant->player) {
+            $name = trim($participant->player->first_name . ' ' . $participant->player->last_name);
+
+            if ($participant->player->nickname) {
+                return $name . ' (' . $participant->player->nickname . ')';
+            }
+
+            return $name;
+        }
+
+        if ($participant->team) {
+            return $participant->team->name;
+        }
+
+        return 'Nepoznat učesnik';
     }
 }
