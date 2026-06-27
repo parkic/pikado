@@ -48,6 +48,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('venues/{venue:slug}/resources', [VenueResourceController::class, 'index'])
         ->name('venues.resources.index');
 
+    Route::get('venues/{venue:slug}/resources/create', [VenueResourceController::class, 'create'])
+        ->name('venues.resources.create');
+
+    Route::post('venues/{venue:slug}/resources', [VenueResourceController::class, 'store'])
+        ->name('venues.resources.store');
 
 });
 

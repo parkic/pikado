@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
+use App\Enums\ResourceType;
+
 class VenueResourceController extends Controller
 {
     public function index(Request $request, Venue $venue): Response
@@ -41,5 +43,62 @@ class VenueResourceController extends Controller
             ],
             'resources' => $resources,
         ]);
+    }
+
+    public function create(Request $request, Venue $venue): Response
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+
+        return Inertia::render('Venues/Resources/Create', [
+            'venue' => [
+                'id' => $venue->id,
+                'name' => $venue->name,
+                'slug' => $venue->slug,
+            ],
+            'resourceTypes' => collect(ResourceType::cases())
+                ->map(fn ($type) => [
+                    'label' => $type->value,
+                    'value' => $type->value,
+                ]),
+        ]);
+    }
+
+    public function store(Request $request, Venue $venue)
+    {
+        $user = $request->user();
+
+        $hasVenueAccess = $user->global_role?->value === 'superadmin'
+            || $user->venueUsers()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->exists();
+
+        abort_unless($hasVenueAccess, 403);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'type' => ['required', 'string', 'in:dart_board,beer_pong_table,other'],
+            'sort_order' => ['required', 'integer', 'min:0'],
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $venue->venueResources()->create([
+            'name' => $validated['name'],
+            'type' => ResourceType::from($validated['type']),
+            'sort_order' => $validated['sort_order'],
+            'is_active' => $validated['is_active'],
+        ]);
+
+        return redirect()
+            ->route('venues.resources.index', ['venue' => $venue->slug])
+            ->with('success', 'Resource je uspešno dodat.');
     }
 }
