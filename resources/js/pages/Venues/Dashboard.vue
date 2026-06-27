@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 
 type VenueResource = {
     id: number;
@@ -75,6 +75,59 @@ defineOptions({
                     Aktivan lokal
                 </p>
             </div>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-3">
+            <Link
+                :href="`/venues/${venue.slug}/resources`"
+                class="rounded-xl border border-sidebar-border/70 p-4 transition hover:bg-muted dark:border-sidebar-border"
+            >
+                <p class="text-sm text-muted-foreground">
+                    Podešavanja lokala
+                </p>
+
+                <h2 class="mt-2 text-lg font-medium">
+                    Resources
+                </h2>
+
+                <p class="mt-1 text-sm text-muted-foreground">
+                    Pikado aparati, beer pong stolovi i ostala oprema.
+                </p>
+            </Link>
+
+            <Link
+                :href="`/venues/${venue.slug}/players`"
+                class="rounded-xl border border-sidebar-border/70 p-4 transition hover:bg-muted dark:border-sidebar-border"
+            >
+                <p class="text-sm text-muted-foreground">
+                    Učesnici
+                </p>
+
+                <h2 class="mt-2 text-lg font-medium">
+                    Igrači
+                </h2>
+
+                <p class="mt-1 text-sm text-muted-foreground">
+                    Baza igrača za turnire u ovom lokalu.
+                </p>
+            </Link>
+
+            <Link
+                :href="`/venues/${venue.slug}/teams`"
+                class="rounded-xl border border-sidebar-border/70 p-4 transition hover:bg-muted dark:border-sidebar-border"
+            >
+                <p class="text-sm text-muted-foreground">
+                    Ekipni turniri
+                </p>
+
+                <h2 class="mt-2 text-lg font-medium">
+                    Timovi
+                </h2>
+
+                <p class="mt-1 text-sm text-muted-foreground">
+                    Baza timova za ekipne formate.
+                </p>
+            </Link>
         </div>
 
         <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
