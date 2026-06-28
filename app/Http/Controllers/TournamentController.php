@@ -309,6 +309,60 @@ class TournamentController extends Controller
             ->with('success', 'Grupe su sačuvane.');
     }
 
+    public function setupQualification(Request $request, Venue $venue, Tournament $tournament): Response
+    {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        return Inertia::render('Venues/Tournaments/SetupQualification', [
+            'venue' => [
+                'id' => $venue->id,
+                'name' => $venue->name,
+                'slug' => $venue->slug,
+            ],
+            'tournament' => [
+                'id' => $tournament->id,
+                'name' => $tournament->name,
+                'slug' => $tournament->slug,
+                'settings' => $tournament->settings ?? [],
+                'groups_count' => $tournament->groups()->count(),
+                'participants_count' => $tournament->participants()->count(),
+            ],
+        ]);
+    }
+
+    public function storeQualification(Request $request, Venue $venue, Tournament $tournament): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        $validated = $request->validate([
+            'direct_qualifiers_per_group' => ['required', 'integer', 'min:0', 'max:16'],
+            'repechage_enabled' => ['required', 'boolean'],
+            'repechage_qualifiers_count' => ['nullable', 'integer', 'min:0', 'max:64'],
+        ]);
+
+        $settings = $tournament->settings ?? [];
+
+        $settings['direct_qualifiers_per_group'] = (int) $validated['direct_qualifiers_per_group'];
+        $settings['repechage_enabled'] = (bool) $validated['repechage_enabled'];
+        $settings['repechage_qualifiers_count'] = $validated['repechage_qualifiers_count'] !== null
+            ? (int) $validated['repechage_qualifiers_count']
+            : null;
+
+        $tournament->update([
+            'settings' => $settings,
+        ]);
+
+        return redirect()
+            ->route('venues.tournaments.standings.index', [$venue, $tournament])
+            ->with('success', 'Podešavanja prolaza iz grupe su sačuvana.');
+    }
+
     public function startGroupDraw(Request $request, Venue $venue, Tournament $tournament): RedirectResponse
     {
         $user = $request->user();

@@ -146,6 +146,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/standings', [TournamentStandingsController::class, 'index'])
         ->scopeBindings()
         ->name('venues.tournaments.standings.index');
+    Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/qualification/setup', [TournamentController::class, 'setupQualification'])
+        ->scopeBindings()
+        ->name('venues.tournaments.qualification.setup');
+    Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/qualification/setup', [TournamentController::class, 'storeQualification'])
+        ->scopeBindings()
+        ->name('venues.tournaments.qualification.store');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 
