@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\MatchStage;
 use App\Enums\MatchStatus;
+use App\Enums\WinReason;
 use App\Models\Tournament;
 use App\Models\TournamentMatch;
 use App\Models\TournamentParticipant;
@@ -130,6 +131,56 @@ class TournamentScheduleController extends Controller
         ]);
 
         return back()->with('success', 'Resource za meč je promenjen.');
+    }
+
+    public function updateResult(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        TournamentMatch $match
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+        abort_unless($match->tournament_id === $tournament->id, 404);
+
+        $validated = $request->validate([
+            'score_a' => ['required', 'integer', 'min:0', 'max:999'],
+            'score_b' => ['required', 'integer', 'min:0', 'max:999'],
+        ]);
+
+        if ((int) $validated['score_a'] === (int) $validated['score_b']) {
+            return back()->withErrors([
+                'score' => 'Rezultat ne može biti nerešen.',
+            ]);
+        }
+
+        if (! $match->participant_a_id || ! $match->participant_b_id) {
+            return back()->withErrors([
+                'score' => 'Meč nema oba učesnika i rezultat ne može biti unet.',
+            ]);
+        }
+
+        $winnerParticipantId = (int) $validated['score_a'] > (int) $validated['score_b']
+            ? $match->participant_a_id
+            : $match->participant_b_id;
+
+        $loserParticipantId = $winnerParticipantId === $match->participant_a_id
+            ? $match->participant_b_id
+            : $match->participant_a_id;
+
+        $match->update([
+            'score_a' => $validated['score_a'],
+            'score_b' => $validated['score_b'],
+            'winner_participant_id' => $winnerParticipantId,
+            'loser_participant_id' => $loserParticipantId,
+            'status' => MatchStatus::FINISHED,
+            'win_reason' => WinReason::NORMAL,
+            'finished_at' => now(),
+        ]);
+
+        return back()->with('success', 'Rezultat je sačuvan.');
     }
 
     private function participantDisplayName(TournamentParticipant $participant): string

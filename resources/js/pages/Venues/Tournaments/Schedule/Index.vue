@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
+import { reactive } from 'vue';
 
 type Venue = {
     id: number;
@@ -63,6 +64,21 @@ const props = defineProps<{
     resources: AvailableResource[];
 }>();
 
+const resultForms = reactive<Record<number, {
+    score_a: string;
+    score_b: string;
+}>>(
+    Object.fromEntries(
+        props.matches.map((match) => [
+            match.id,
+            {
+                score_a: match.score_a !== null ? String(match.score_a) : '',
+                score_b: match.score_b !== null ? String(match.score_b) : '',
+            },
+        ]),
+    ),
+);
+
 defineOptions({
     layout: {
         breadcrumbs: [
@@ -98,6 +114,21 @@ const updateMatchResource = (match: Match, event: Event) => {
         `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/schedule/matches/${match.id}/resource`,
         {
             tournament_resource_id: selectedValue ? Number(selectedValue) : null,
+        },
+        {
+            preserveScroll: true,
+        },
+    );
+};
+
+const updateMatchResult = (match: Match) => {
+    const resultForm = resultForms[match.id];
+
+    router.patch(
+        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/schedule/matches/${match.id}/result`,
+        {
+            score_a: resultForm.score_a,
+            score_b: resultForm.score_b,
         },
         {
             preserveScroll: true,
@@ -259,14 +290,43 @@ const updateMatchResource = (match: Match, event: Event) => {
                                     {{ match.round_robin_leg ?? '-' }}
                                 </td>
 
-                                <td class="px-4 py-3 text-muted-foreground">
-                                    <template v-if="match.score_a !== null && match.score_b !== null">
-                                        {{ match.score_a }} : {{ match.score_b }}
-                                    </template>
+                                <td class="px-4 py-3">
+                                    <div class="flex min-w-44 items-center gap-2">
+                                        <input
+                                            v-model="resultForms[match.id].score_a"
+                                            type="number"
+                                            min="0"
+                                            max="999"
+                                            class="w-16 rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-center text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                                        >
 
-                                    <template v-else>
-                                        -
-                                    </template>
+                                        <span class="text-muted-foreground">
+                                            :
+                                        </span>
+
+                                        <input
+                                            v-model="resultForms[match.id].score_b"
+                                            type="number"
+                                            min="0"
+                                            max="999"
+                                            class="w-16 rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-center text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                                        >
+
+                                        <button
+                                            type="button"
+                                            class="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+                                            @click="updateMatchResult(match)"
+                                        >
+                                            Sačuvaj
+                                        </button>
+                                    </div>
+
+                                    <p
+                                        v-if="match.winner"
+                                        class="mt-1 text-xs text-emerald-600 dark:text-emerald-300"
+                                    >
+                                        Pobednik: {{ match.winner.display_name }}
+                                    </p>
                                 </td>
 
                                 <td class="px-4 py-3">
