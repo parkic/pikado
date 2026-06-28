@@ -106,10 +106,12 @@ const participantForSlot = (
 
 const selectSlot = (groupName: string, slotNumber: number) => {
     form.group_position = `${groupName}${slotNumber}`;
+    form.clearErrors('slot');
 };
 
 const clearSelectedSlot = () => {
     form.group_position = '';
+    form.clearErrors('slot');
 };
 
 const selectExistingPlayer = () => {
@@ -147,7 +149,13 @@ const clearExistingTeam = () => {
 };
 
 const submit = () => {
-    form.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/group-draw`);
+    form.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/group-draw`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            form.reset();
+            form.clearErrors();
+        },
+    });
 };
 
 const removeParticipant = (participant: TournamentGroupParticipant | undefined) => {
