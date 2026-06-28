@@ -7,6 +7,7 @@ use App\Enums\ParticipantType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class TournamentParticipant extends Model
@@ -51,5 +52,20 @@ class TournamentParticipant extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(TournamentGroup::class, 'tournament_group_id');
+    }
+
+    public function matchesAsParticipantA(): HasMany
+    {
+        return $this->hasMany(TournamentMatch::class, 'participant_a_id');
+    }
+
+    public function matchesAsParticipantB(): HasMany
+    {
+        return $this->hasMany(TournamentMatch::class, 'participant_b_id');
+    }
+
+    public function wonMatches(): HasMany
+    {
+        return $this->hasMany(TournamentMatch::class, 'winner_participant_id');
     }
 }
