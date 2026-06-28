@@ -54,6 +54,7 @@ class GroupStandingsCalculator
                 'points_against' => 0,
                 'points_difference' => 0,
                 'standing_points' => 0,
+                'qualification_override_status' => $participant->qualification_override_status?->value,
             ];
         }
 
@@ -179,6 +180,16 @@ class GroupStandingsCalculator
                         return $row;
                     }
 
+                    if ($row['qualification_override_status']) {
+                        $row['qualification_status'] = $row['qualification_override_status'];
+                        $row['qualification_label'] = $this->qualificationLabel($row['qualification_status']);
+                        $row['qualification_is_manual'] = true;
+
+                        return $row;
+                    }
+
+                    $row['qualification_is_manual'] = false;
+
                     $firstRepechagePosition = $directQualifiersPerGroup + 1;
                     $lastRepechagePosition = $directQualifiersPerGroup + $repechagePerGroup;
 
@@ -223,5 +234,15 @@ class GroupStandingsCalculator
         }
 
         return 'Nepoznat učesnik';
+    }
+
+    private function qualificationLabel(string $status): string
+    {
+        return match ($status) {
+            'direct' => 'Direktan prolaz',
+            'repechage' => 'Repasaž',
+            'eliminated' => 'Ispao',
+            default => '-',
+        };
     }
 }

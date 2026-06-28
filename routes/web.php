@@ -150,6 +150,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/standings', [TournamentStandingsController::class, 'index'])
         ->scopeBindings()
         ->name('venues.tournaments.standings.index');
+    Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/standings/participants/{participant}/qualification-override', [TournamentStandingsController::class, 'updateQualificationOverride'])
+        ->scopeBindings()
+        ->name('venues.tournaments.standings.participants.qualification_override');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/qualification/setup', [TournamentController::class, 'setupQualification'])
         ->scopeBindings()
         ->name('venues.tournaments.qualification.setup');

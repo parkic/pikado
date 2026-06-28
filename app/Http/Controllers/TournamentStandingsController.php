@@ -8,6 +8,10 @@ use App\Services\GroupStandingsCalculator;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Enums\QualificationStatus;
+use App\Models\TournamentParticipant;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\Rule;
 
 class TournamentStandingsController extends Controller
 {
@@ -37,5 +41,35 @@ class TournamentStandingsController extends Controller
             ],
             'groups' => $calculator->calculate($tournament),
         ]);
+    }
+
+    public function updateQualificationOverride(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        TournamentParticipant $participant
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+        abort_unless($participant->tournament_id === $tournament->id, 404);
+
+        $validated = $request->validate([
+            'qualification_override_status' => [
+                'nullable',
+                Rule::in([
+                    QualificationStatus::DIRECT->value,
+                    QualificationStatus::REPECHAGE->value,
+                    QualificationStatus::ELIMINATED->value,
+                ]),
+            ],
+        ]);
+
+        $participant->update([
+            'qualification_override_status' => $validated['qualification_override_status'] ?: null,
+        ]);
+
+        return back()->with('success', 'Status prolaza je promenjen.');
     }
 }

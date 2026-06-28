@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ParticipantStatus;
 use App\Enums\ParticipantType;
+use App\Enums\QualificationStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,7 @@ class TournamentParticipant extends Model
         'tournament_group_id',
         'group_position',
         'status',
+        'qualification_override_status',
         'withdrawn_at',
         'withdrawn_stage',
         'withdrawn_reason',
@@ -31,6 +33,7 @@ class TournamentParticipant extends Model
     protected $casts = [
         'participant_type' => ParticipantType::class,
         'status' => ParticipantStatus::class,
+        'qualification_override_status' => QualificationStatus::class,
         'withdrawn_at' => 'datetime',
     ];
 

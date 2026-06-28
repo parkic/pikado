@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 type Venue = {
     id: number;
@@ -29,6 +29,8 @@ type StandingRow = {
     position: number;
     qualification_status: string;
     qualification_label: string;
+    qualification_override_status: string | null;
+    qualification_is_manual: boolean;
 };
 
 type StandingGroup = {
@@ -39,7 +41,7 @@ type StandingGroup = {
     rows: StandingRow[];
 };
 
-defineProps<{
+const props = defineProps<{
     venue: Venue;
     tournament: Tournament;
     groups: StandingGroup[];
@@ -74,6 +76,21 @@ const qualificationBadgeClasses = (status: string): string => {
     }
 
     return 'bg-muted text-muted-foreground';
+};
+
+const updateQualificationOverride = (row: StandingRow, event: Event) => {
+    const target = event.target as HTMLSelectElement;
+
+    router.patch(
+        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/standings/participants/${row.participant_id}/qualification-override`,
+        {
+            qualification_override_status: target.value || null,
+        },
+        {
+            preserveScroll: true,
+            preserveState: false,
+        },
+    );
 };
 </script>
 
@@ -227,13 +244,44 @@ const qualificationBadgeClasses = (status: string): string => {
                                     <td class="px-3 py-3 text-center font-semibold">
                                         {{ row.standing_points }}
                                     </td>
-                                    <td class="px-3 py-3 text-center">
-                                        <span
-                                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-                                            :class="qualificationBadgeClasses(row.qualification_status)"
-                                        >
-                                            {{ row.qualification_label }}
-                                        </span>
+                                    <td class="px-3 py-3">
+                                        <div class="flex min-w-44 flex-col gap-2">
+                                            <span
+                                                class="inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium"
+                                                :class="qualificationBadgeClasses(row.qualification_status)"
+                                            >
+                                                {{ row.qualification_label }}
+                                            </span>
+
+                                            <select
+                                                :value="row.qualification_override_status ?? ''"
+                                                class="rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-xs outline-none transition focus:border-primary dark:border-sidebar-border"
+                                                @change="updateQualificationOverride(row, $event)"
+                                            >
+                                                <option value="">
+                                                    Automatski
+                                                </option>
+
+                                                <option value="direct">
+                                                    Direktan prolaz
+                                                </option>
+
+                                                <option value="repechage">
+                                                    Repasaž
+                                                </option>
+
+                                                <option value="eliminated">
+                                                    Ispao
+                                                </option>
+                                            </select>
+
+                                            <span
+                                                v-if="row.qualification_is_manual"
+                                                class="text-xs text-primary"
+                                            >
+                                                Ručno podešeno
+                                            </span>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>
