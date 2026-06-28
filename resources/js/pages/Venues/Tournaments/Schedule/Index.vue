@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 type Venue = {
     id: number;
@@ -29,6 +29,13 @@ type MatchResource = {
     type: string;
 };
 
+type AvailableResource = {
+    id: number;
+    name: string;
+    type: string;
+    type_label: string;
+};
+
 type Match = {
     id: number;
     stage: string;
@@ -49,10 +56,11 @@ type Match = {
     resource: MatchResource | null;
 };
 
-defineProps<{
+const props = defineProps<{
     venue: Venue;
     tournament: Tournament;
     matches: Match[];
+    resources: AvailableResource[];
 }>();
 
 defineOptions({
@@ -80,6 +88,21 @@ const statusBadgeClasses = (status: string): string => {
     }
 
     return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300';
+};
+
+const updateMatchResource = (match: Match, event: Event) => {
+    const target = event.target as HTMLSelectElement;
+    const selectedValue = target.value;
+
+    router.patch(
+        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/schedule/matches/${match.id}/resource`,
+        {
+            tournament_resource_id: selectedValue ? Number(selectedValue) : null,
+        },
+        {
+            preserveScroll: true,
+        },
+    );
 };
 </script>
 
@@ -212,8 +235,24 @@ const statusBadgeClasses = (status: string): string => {
                                     </div>
                                 </td>
 
-                                <td class="px-4 py-3 text-muted-foreground">
-                                    {{ match.resource?.name ?? '-' }}
+                                <td class="px-4 py-3">
+                                    <select
+                                        :value="match.resource?.id ?? ''"
+                                        class="w-full min-w-36 rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                                        @change="updateMatchResource(match, $event)"
+                                    >
+                                        <option value="">
+                                            Bez resource-a
+                                        </option>
+
+                                        <option
+                                            v-for="resource in resources"
+                                            :key="resource.id"
+                                            :value="resource.id"
+                                        >
+                                            {{ resource.name }}
+                                        </option>
+                                    </select>
                                 </td>
 
                                 <td class="px-4 py-3 text-muted-foreground">

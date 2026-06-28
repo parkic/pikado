@@ -7,10 +7,14 @@ use App\Enums\MatchStatus;
 use App\Models\Tournament;
 use App\Models\TournamentMatch;
 use App\Models\TournamentParticipant;
+use App\Models\TournamentResource;
 use App\Models\Venue;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+
 
 class TournamentScheduleController extends Controller
 {
@@ -85,7 +89,47 @@ class TournamentScheduleController extends Controller
                     ->count(),
             ],
             'matches' => $matches,
+            'resources' => $tournament->resources()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (TournamentResource $resource) => [
+                    'id' => $resource->id,
+                    'name' => $resource->name,
+                    'type' => $resource->type->value,
+                    'type_label' => $resource->type->value,
+                ])
+                ->values(),
         ]);
+    }
+
+    public function updateResource(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        TournamentMatch $match
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+        abort_unless($match->tournament_id === $tournament->id, 404);
+
+        $validated = $request->validate([
+            'tournament_resource_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('tournament_resources', 'id')
+                    ->where('tournament_id', $tournament->id),
+            ],
+        ]);
+
+        $match->update([
+            'tournament_resource_id' => $validated['tournament_resource_id'] ?? null,
+        ]);
+
+        return back()->with('success', 'Resource za meč je promenjen.');
     }
 
     private function participantDisplayName(TournamentParticipant $participant): string

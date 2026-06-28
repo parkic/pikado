@@ -136,6 +136,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/schedule', [TournamentScheduleController::class, 'index'])
         ->scopeBindings()
         ->name('venues.tournaments.schedule.index');
+    Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/schedule/matches/{match}/resource', [TournamentScheduleController::class, 'updateResource'])
+        ->scopeBindings()
+        ->name('venues.tournaments.schedule.matches.resource');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 
