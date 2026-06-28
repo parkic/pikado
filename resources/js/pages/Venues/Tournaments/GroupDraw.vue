@@ -70,9 +70,13 @@ const form = useForm({
     last_name: '',
     nickname: '',
     team_name: '',
+    group_position: '',
 });
 
 const groupSize = computed(() => props.tournament.settings.group_size ?? 0);
+const activeGroupPosition = computed(() => {
+    return form.group_position || props.tournament.next_slot?.group_position || null;
+});
 
 const participantForSlot = (
     group: TournamentGroup,
@@ -81,6 +85,14 @@ const participantForSlot = (
     return group.participants.find((participant) => {
         return participant.group_position === `${group.name}${slotNumber}`;
     });
+};
+
+const selectSlot = (groupName: string, slotNumber: number) => {
+    form.group_position = `${groupName}${slotNumber}`;
+};
+
+const clearSelectedSlot = () => {
+    form.group_position = '';
 };
 
 const submit = () => {
@@ -184,16 +196,29 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                 </h2>
 
                 <div
-                    v-if="tournament.next_slot"
+                    v-if="activeGroupPosition"
                     class="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-4"
                 >
-                    <p class="text-sm text-muted-foreground">
-                        Sledeće mesto
-                    </p>
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-sm text-muted-foreground">
+                                {{ form.group_position ? 'Izabrano mesto' : 'Sledeće mesto' }}
+                            </p>
 
-                    <p class="mt-1 text-3xl font-semibold tracking-tight">
-                        {{ tournament.next_slot.group_position }}
-                    </p>
+                            <p class="mt-1 text-3xl font-semibold tracking-tight">
+                                {{ activeGroupPosition }}
+                            </p>
+                        </div>
+
+                        <button
+                            v-if="form.group_position"
+                            type="button"
+                            class="text-xs font-medium text-primary hover:underline"
+                            @click="clearSelectedSlot"
+                        >
+                            Vrati automatski
+                        </button>
+                    </div>
                 </div>
 
                 <div
@@ -211,7 +236,7 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                 </div>
 
                 <div
-                    v-if="tournament.next_slot && tournament.match_mode === 'singles'"
+                    v-if="activeGroupPosition && tournament.match_mode === 'singles'"
                     class="mt-5 space-y-4"
                 >
                     <div>
@@ -223,7 +248,7 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                             v-model="form.first_name"
                             type="text"
                             class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
-                            placeholder="Nikola"
+                            placeholder="Jelena"
                         >
 
                         <p
@@ -263,7 +288,7 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                             v-model="form.nickname"
                             type="text"
                             class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
-                            placeholder="Niki"
+                            placeholder="Jeca"
                         >
 
                         <p
@@ -276,7 +301,7 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                 </div>
 
                 <div
-                    v-if="tournament.next_slot && tournament.match_mode === 'doubles'"
+                    v-if="activeGroupPosition && tournament.match_mode === 'doubles'"
                     class="mt-5 space-y-4"
                 >
                     <div>
@@ -302,11 +327,11 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
 
                 <button
                     type="submit"
-                    :disabled="form.processing || !tournament.next_slot"
+                    :disabled="form.processing || !activeGroupPosition"
                     class="mt-6 inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
                 >
-                    <span v-if="tournament.next_slot">
-                        {{ form.processing ? 'Dodajem...' : `Dodaj u ${tournament.next_slot.group_position}` }}
+                    <span v-if="activeGroupPosition">
+                        {{ form.processing ? 'Dodajem...' : `Dodaj u ${activeGroupPosition}` }}
                     </span>
 
                     <span v-else>
@@ -379,12 +404,14 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                                     </button>
                                 </div>
 
-                                <span
+                                <button
                                     v-else
-                                    class="text-muted-foreground"
+                                    type="button"
+                                    class="text-xs font-medium text-primary hover:underline"
+                                    @click="selectSlot(group.name, slotNumber)"
                                 >
-                                    Prazno
-                                </span>
+                                    Dodaj ovde
+                                </button>
                             </div>
                         </div>
                     </div>

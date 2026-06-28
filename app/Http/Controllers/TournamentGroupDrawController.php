@@ -78,12 +78,27 @@ class TournamentGroupDrawController extends Controller
 
         $this->loadTournamentForDraw($tournament);
 
-        $nextSlot = $this->nextEmptySlot($tournament);
+        $requestedGroupPosition = trim((string) $request->input('group_position', ''));
 
-        if (! $nextSlot) {
+        $targetSlot = $requestedGroupPosition !== ''
+            ? $this->slotFromGroupPosition($tournament, $requestedGroupPosition)
+            : $this->nextEmptySlot($tournament);
+
+        if (! $targetSlot) {
             return back()
                 ->withErrors([
-                    'slot' => 'Nema više slobodnih mesta u grupama.',
+                    'slot' => 'Izabrano mesto ne postoji ili nema više slobodnih mesta u grupama.',
+                ]);
+        }
+
+        if (
+            $tournament->participants()
+                ->where('group_position', $targetSlot['group_position'])
+                ->exists()
+        ) {
+            return back()
+                ->withErrors([
+                    'slot' => 'Izabrano mesto je već popunjeno.',
                 ]);
         }
 
@@ -94,18 +109,18 @@ class TournamentGroupDrawController extends Controller
                 'nickname' => ['nullable', 'string', 'max:255'],
             ]);
 
-            $this->storePlayerParticipant($venue, $tournament, $nextSlot, $validated);
+            $this->storePlayerParticipant($venue, $tournament, $targetSlot, $validated);
         } else {
             $validated = $request->validate([
                 'team_name' => ['required', 'string', 'max:255'],
             ]);
 
-            $this->storeTeamParticipant($venue, $tournament, $nextSlot, $validated);
+            $this->storeTeamParticipant($venue, $tournament, $targetSlot, $validated);
         }
 
         return redirect()
             ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
-            ->with('success', 'Učesnik je dodat u ' . $nextSlot['group_position'] . '.');
+            ->with('success', 'Učesnik je dodat u ' . $targetSlot['group_position'] . '.');
     }
 
     public function destroyParticipant(
@@ -438,5 +453,39 @@ class TournamentGroupDrawController extends Controller
         }
 
         return 'Nepoznat učesnik';
+    }
+
+    private function slotFromGroupPosition(Tournament $tournament, string $groupPosition): ?array
+    {
+        $groupSize = (int) data_get($tournament->settings ?? [], 'group_size', 0);
+
+        if ($groupSize < 1 || $tournament->groups->isEmpty()) {
+            return null;
+        }
+
+        $groupPosition = strtoupper(trim($groupPosition));
+
+        if (! preg_match('/^([A-Z]+)([0-9]+)$/', $groupPosition, $matches)) {
+            return null;
+        }
+
+        $groupName = $matches[1];
+        $slotNumber = (int) $matches[2];
+
+        if ($slotNumber < 1 || $slotNumber > $groupSize) {
+            return null;
+        }
+
+        $group = $tournament->groups->firstWhere('name', $groupName);
+
+        if (! $group) {
+            return null;
+        }
+
+        return [
+            'group' => $group,
+            'slot_number' => $slotNumber,
+            'group_position' => $groupName . $slotNumber,
+        ];
     }
 }
