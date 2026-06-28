@@ -148,13 +148,8 @@ class TournamentScheduleController extends Controller
         $validated = $request->validate([
             'score_a' => ['required', 'integer', 'min:0', 'max:999'],
             'score_b' => ['required', 'integer', 'min:0', 'max:999'],
+            'winner_participant_id' => ['nullable', 'integer'],
         ]);
-
-        if ((int) $validated['score_a'] === (int) $validated['score_b']) {
-            return back()->withErrors([
-                'score' => 'Rezultat ne može biti nerešen.',
-            ]);
-        }
 
         if (! $match->participant_a_id || ! $match->participant_b_id) {
             return back()->withErrors([
@@ -162,21 +157,41 @@ class TournamentScheduleController extends Controller
             ]);
         }
 
-        $winnerParticipantId = (int) $validated['score_a'] > (int) $validated['score_b']
-            ? $match->participant_a_id
-            : $match->participant_b_id;
+        $scoreA = (int) $validated['score_a'];
+        $scoreB = (int) $validated['score_b'];
+
+        if ($scoreA === $scoreB) {
+            $winnerParticipantId = isset($validated['winner_participant_id'])
+                ? (int) $validated['winner_participant_id']
+                : null;
+
+            if (! in_array($winnerParticipantId, [
+                $match->participant_a_id,
+                $match->participant_b_id,
+            ], true)) {
+                return back()->withErrors([
+                    'winner_participant_id' => 'Kod nerešenog rezultata moraš da izabereš pobednika.',
+                ]);
+            }
+        } else {
+            $winnerParticipantId = $scoreA > $scoreB
+                ? $match->participant_a_id
+                : $match->participant_b_id;
+        }
 
         $loserParticipantId = $winnerParticipantId === $match->participant_a_id
             ? $match->participant_b_id
             : $match->participant_a_id;
 
         $match->update([
-            'score_a' => $validated['score_a'],
-            'score_b' => $validated['score_b'],
+            'score_a' => $scoreA,
+            'score_b' => $scoreB,
             'winner_participant_id' => $winnerParticipantId,
             'loser_participant_id' => $loserParticipantId,
             'status' => MatchStatus::FINISHED,
-            'win_reason' => WinReason::NORMAL,
+            'win_reason' => $scoreA === $scoreB
+                ? WinReason::MANUAL_OVERRIDE
+                : WinReason::NORMAL,
             'finished_at' => now(),
         ]);
 

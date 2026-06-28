@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 
 type Venue = {
     id: number;
@@ -67,6 +67,7 @@ const props = defineProps<{
 const resultForms = reactive<Record<number, {
     score_a: string;
     score_b: string;
+    winner_participant_id: string;
 }>>(
     Object.fromEntries(
         props.matches.map((match) => [
@@ -74,10 +75,13 @@ const resultForms = reactive<Record<number, {
             {
                 score_a: match.score_a !== null ? String(match.score_a) : '',
                 score_b: match.score_b !== null ? String(match.score_b) : '',
+                winner_participant_id: match.winner ? String(match.winner.id) : '',
             },
         ]),
     ),
 );
+
+const tieBreakerMatch = ref<Match | null>(null);
 
 defineOptions({
     layout: {
@@ -121,7 +125,17 @@ const updateMatchResource = (match: Match, event: Event) => {
     );
 };
 
-const updateMatchResult = (match: Match) => {
+const isDrawResult = (match: Match): boolean => {
+    const resultForm = resultForms[match.id];
+
+    if (resultForm.score_a === '' || resultForm.score_b === '') {
+        return false;
+    }
+
+    return Number(resultForm.score_a) === Number(resultForm.score_b);
+};
+
+const submitMatchResult = (match: Match, onSuccess?: () => void) => {
     const resultForm = resultForms[match.id];
 
     router.patch(
@@ -129,11 +143,72 @@ const updateMatchResult = (match: Match) => {
         {
             score_a: resultForm.score_a,
             score_b: resultForm.score_b,
+            winner_participant_id: resultForm.winner_participant_id || null,
         },
         {
             preserveScroll: true,
+            onSuccess,
         },
     );
+};
+
+const openTieBreakerModal = (match: Match) => {
+    const resultForm = resultForms[match.id];
+
+    if (!resultForm.winner_participant_id && match.winner) {
+        resultForm.winner_participant_id = String(match.winner.id);
+    }
+
+    tieBreakerMatch.value = match;
+};
+
+const updateMatchResult = (match: Match) => {
+    const resultForm = resultForms[match.id];
+
+    if (isDrawResult(match) && !resultForm.winner_participant_id) {
+        openTieBreakerModal(match);
+
+        return;
+    }
+
+    submitMatchResult(match);
+};
+
+const closeTieBreakerModal = () => {
+    tieBreakerMatch.value = null;
+};
+
+const chooseTieBreakerWinner = (match: Match, participantId: number) => {
+    resultForms[match.id].winner_participant_id = String(participantId);
+};
+
+const saveTieBreakerWinner = () => {
+    if (!tieBreakerMatch.value) {
+        return;
+    }
+
+    const match = tieBreakerMatch.value;
+    const resultForm = resultForms[match.id];
+
+    if (!resultForm.winner_participant_id) {
+        window.alert('Moraš da izabereš pobednika.');
+
+        return;
+    }
+
+    submitMatchResult(match, () => {
+        closeTieBreakerModal();
+    });
+};
+
+const tieBreakerWinnerButtonClasses = (match: Match, participantId: number): string => {
+    const isSelected = resultForms[match.id].winner_participant_id === String(participantId);
+
+    if (isSelected) {
+        return 'border-primary bg-primary/10 text-primary';
+    }
+
+    return 'border-sidebar-border/70 hover:bg-muted dark:border-sidebar-border';
 };
 </script>
 
@@ -156,12 +231,21 @@ const updateMatchResult = (match: Match) => {
                 </p>
             </div>
 
-            <Link
-                :href="`/venues/${venue.slug}/tournaments/${tournament.slug}`"
-                class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-            >
-                Nazad na turnir
-            </Link>
+            <div class="flex flex-col gap-2 sm:flex-row">
+                <Link
+                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/standings`"
+                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+                >
+                    Tabela
+                </Link>
+
+                <Link
+                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}`"
+                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+                >
+                    Nazad na turnir
+                </Link>
+            </div>
         </div>
 
         <div class="grid gap-4 md:grid-cols-3">
@@ -317,16 +401,34 @@ const updateMatchResult = (match: Match) => {
                                             class="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90"
                                             @click="updateMatchResult(match)"
                                         >
-                                            Sačuvaj
+                                            {{ isDrawResult(match) && !resultForms[match.id].winner_participant_id ? 'Izaberi' : 'Sačuvaj' }}
                                         </button>
                                     </div>
 
                                     <p
-                                        v-if="match.winner"
-                                        class="mt-1 text-xs text-emerald-600 dark:text-emerald-300"
+                                        v-if="isDrawResult(match) && !resultForms[match.id].winner_participant_id"
+                                        class="mt-1 text-xs text-yellow-600 dark:text-yellow-300"
                                     >
-                                        Pobednik: {{ match.winner.display_name }}
+                                        Nerešeno — treba izabrati pobednika.
                                     </p>
+
+                                    <div
+                                        v-if="match.winner"
+                                        class="mt-1 flex flex-wrap items-center gap-2 text-xs"
+                                    >
+                                        <span class="text-emerald-600 dark:text-emerald-300">
+                                            Pobednik: {{ match.winner.display_name }}
+                                        </span>
+
+                                        <button
+                                            v-if="isDrawResult(match)"
+                                            type="button"
+                                            class="font-medium text-primary hover:underline"
+                                            @click="openTieBreakerModal(match)"
+                                        >
+                                            Izmeni
+                                        </button>
+                                    </div>
                                 </td>
 
                                 <td class="px-4 py-3">
@@ -348,6 +450,91 @@ const updateMatchResult = (match: Match) => {
                 class="mt-4 rounded-lg border border-dashed border-sidebar-border/70 p-4 text-sm text-muted-foreground dark:border-sidebar-border"
             >
                 Još nema generisanih mečeva.
+            </div>
+        </div>
+
+
+        <div
+            v-if="tieBreakerMatch"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        >
+            <button
+                type="button"
+                class="absolute inset-0"
+                aria-label="Zatvori modal"
+                @click="closeTieBreakerModal"
+            />
+
+            <div class="relative w-full max-w-lg rounded-xl border border-sidebar-border/70 bg-background p-5 shadow-xl dark:border-sidebar-border">
+                <div>
+                    <p class="text-sm text-muted-foreground">
+                        Nerešen rezultat
+                    </p>
+
+                    <h2 class="mt-1 text-xl font-semibold">
+                        Izaberi pobednika
+                    </h2>
+
+                    <p class="mt-2 text-sm text-muted-foreground">
+                        Rezultat je
+                        <span class="font-medium text-foreground">
+                            {{ resultForms[tieBreakerMatch.id].score_a }} : {{ resultForms[tieBreakerMatch.id].score_b }}
+                        </span>
+                        i razlika će ostati 0. Izabrani učesnik dobija pobedu i 1 bod.
+                    </p>
+                </div>
+
+                <div class="mt-5 grid gap-3">
+                    <button
+                        v-if="tieBreakerMatch.participant_a"
+                        type="button"
+                        class="rounded-xl border p-4 text-left transition"
+                        :class="tieBreakerWinnerButtonClasses(tieBreakerMatch, tieBreakerMatch.participant_a.id)"
+                        @click="chooseTieBreakerWinner(tieBreakerMatch, tieBreakerMatch.participant_a.id)"
+                    >
+                        <p class="text-xs text-muted-foreground">
+                            {{ tieBreakerMatch.participant_a.group_position ?? '-' }}
+                        </p>
+
+                        <p class="mt-1 font-medium">
+                            {{ tieBreakerMatch.participant_a.display_name }}
+                        </p>
+                    </button>
+
+                    <button
+                        v-if="tieBreakerMatch.participant_b"
+                        type="button"
+                        class="rounded-xl border p-4 text-left transition"
+                        :class="tieBreakerWinnerButtonClasses(tieBreakerMatch, tieBreakerMatch.participant_b.id)"
+                        @click="chooseTieBreakerWinner(tieBreakerMatch, tieBreakerMatch.participant_b.id)"
+                    >
+                        <p class="text-xs text-muted-foreground">
+                            {{ tieBreakerMatch.participant_b.group_position ?? '-' }}
+                        </p>
+
+                        <p class="mt-1 font-medium">
+                            {{ tieBreakerMatch.participant_b.display_name }}
+                        </p>
+                    </button>
+                </div>
+
+                <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button
+                        type="button"
+                        class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+                        @click="closeTieBreakerModal"
+                    >
+                        Otkaži
+                    </button>
+
+                    <button
+                        type="button"
+                        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                        @click="saveTieBreakerWinner"
+                    >
+                        Sačuvaj rezultat
+                    </button>
+                </div>
             </div>
         </div>
     </div>

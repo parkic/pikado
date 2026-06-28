@@ -10,6 +10,7 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentGroupDrawController;
 use App\Http\Controllers\TournamentScheduleController;
+use App\Http\Controllers\TournamentStandingsController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -142,6 +143,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/schedule/matches/{match}/result', [TournamentScheduleController::class, 'updateResult'])
         ->scopeBindings()
         ->name('venues.tournaments.schedule.matches.result');
+    Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/standings', [TournamentStandingsController::class, 'index'])
+        ->scopeBindings()
+        ->name('venues.tournaments.standings.index');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 
