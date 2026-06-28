@@ -6,6 +6,7 @@ use App\Enums\GameType;
 use App\Enums\GroupRounds;
 use App\Enums\MatchMode;
 use App\Enums\MatchStage;
+use App\Enums\MatchStatus;
 use App\Enums\ScoringMode;
 use App\Enums\TournamentStatus;
 use Illuminate\Http\RedirectResponse;
@@ -140,6 +141,9 @@ class TournamentController extends Controller
             'participants',
             'matches as group_matches_count' => fn ($query) => $query
                 ->where('stage', MatchStage::GROUP->value),
+            'matches as finished_group_matches_count' => fn ($query) => $query
+                ->where('stage', MatchStage::GROUP->value)
+                ->where('status', MatchStatus::FINISHED->value),
         ]);
 
         $totalSlots = $this->totalGroupSlots($tournament);
@@ -172,9 +176,12 @@ class TournamentController extends Controller
                 'participants_count' => $tournament->participants_count,
                 'total_slots' => $totalSlots,
                 'group_matches_count' => $tournament->group_matches_count,
+                'finished_group_matches_count' => $tournament->finished_group_matches_count,
                 'can_start_group_draw' => $this->canStartGroupDraw($tournament, $totalSlots),
                 'can_mark_ready' => $this->canMarkReady($tournament, $totalSlots),
                 'can_generate_group_matches' => $this->canGenerateGroupMatches($tournament, $totalSlots),
+                'can_complete_group_stage' => $this->canCompleteGroupStage($tournament),
+                'next_stage_after_groups' => $this->nextStageAfterGroups($tournament),
                 'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
@@ -441,6 +448,32 @@ class TournamentController extends Controller
             ->with('success', 'Generisano grupnih mečeva: ' . $createdMatches . '.');
     }
 
+    public function completeGroupStage(Request $request, Venue $venue, Tournament $tournament): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        if (! $this->canCompleteGroupStage($tournament)) {
+            return back()->withErrors([
+                'group_stage' => 'Grupna faza ne može biti završena dok svi grupni mečevi nisu završeni.',
+            ]);
+        }
+
+        $nextStatus = $this->nextStageAfterGroups($tournament) === 'repechage'
+            ? TournamentStatus::REPECHAGE
+            : TournamentStatus::KNOCKOUT_DRAW;
+
+        $tournament->update([
+            'status' => $nextStatus,
+        ]);
+
+        return redirect()
+            ->route('venues.tournaments.show', [$venue, $tournament])
+            ->with('success', 'Grupna faza je završena.');
+    }
+
     public function store(Request $request, Venue $venue): RedirectResponse
     {
         $user = $request->user();
@@ -698,5 +731,38 @@ class TournamentController extends Controller
         return ! $tournament->matches()
             ->where('stage', MatchStage::GROUP->value)
             ->exists();
+    }
+
+    private function canCompleteGroupStage(Tournament $tournament): bool
+    {
+        if ($tournament->status !== TournamentStatus::GROUP_STAGE) {
+            return false;
+        }
+
+        $groupMatchesCount = $tournament->matches()
+            ->where('stage', MatchStage::GROUP->value)
+            ->count();
+
+        if ($groupMatchesCount < 1) {
+            return false;
+        }
+
+        $unfinishedGroupMatchesCount = $tournament->matches()
+            ->where('stage', MatchStage::GROUP->value)
+            ->where('status', '!=', MatchStatus::FINISHED->value)
+            ->count();
+
+        return $unfinishedGroupMatchesCount === 0;
+    }
+
+    private function nextStageAfterGroups(Tournament $tournament): string
+    {
+        $repechageEnabled = (bool) data_get(
+            $tournament->settings ?? [],
+            'repechage_enabled',
+            false,
+        );
+
+        return $repechageEnabled ? 'repechage' : 'knockout_draw';
     }
 }
