@@ -11,6 +11,7 @@ use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentGroupDrawController;
 use App\Http\Controllers\TournamentScheduleController;
 use App\Http\Controllers\TournamentStandingsController;
+use App\Http\Controllers\TournamentRepechageController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -155,6 +156,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/qualification/setup', [TournamentController::class, 'storeQualification'])
         ->scopeBindings()
         ->name('venues.tournaments.qualification.store');
+
+    Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/repechage', [TournamentRepechageController::class, 'index'])
+        ->scopeBindings()
+        ->name('venues.tournaments.repechage.index');
+
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 
