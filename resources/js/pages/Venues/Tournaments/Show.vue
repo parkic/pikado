@@ -213,6 +213,13 @@ const participantForSlot = (
                 >
                     Generiši grupne mečeve
                 </button>
+
+                <Link
+                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/schedule`"
+                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+                >
+                    Raspored
+                </Link>
             </div>
         </div>
 

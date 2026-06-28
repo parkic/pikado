@@ -9,6 +9,7 @@ use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentGroupDrawController;
+use App\Http\Controllers\TournamentScheduleController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -78,6 +79,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('venues/{venue:slug}/players/{player}', [PlayerController::class, 'destroy'])
         ->name('venues.players.destroy');
 
+
     // Teams
     Route::get('venues/{venue:slug}/teams', [TeamController::class, 'index'])
         ->name('venues.teams.index');
@@ -91,6 +93,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('venues.teams.update');
     Route::delete('venues/{venue:slug}/teams/{team}', [TeamController::class, 'destroy'])
         ->name('venues.teams.destroy');
+
 
     // Tournaments
     Route::get('venues/{venue:slug}/tournaments', [TournamentController::class, 'index'])
@@ -129,6 +132,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/generate-group-matches', [TournamentController::class, 'generateGroupMatches'])
         ->scopeBindings()
         ->name('venues.tournaments.generate_group_matches');
+
+    Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/schedule', [TournamentScheduleController::class, 'index'])
+        ->scopeBindings()
+        ->name('venues.tournaments.schedule.index');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 
