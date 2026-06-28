@@ -27,6 +27,8 @@ type StandingRow = {
     points_difference: number;
     standing_points: number;
     position: number;
+    qualification_status: string;
+    qualification_label: string;
 };
 
 type StandingGroup = {
@@ -60,6 +62,18 @@ const differenceLabel = (difference: number): string => {
     }
 
     return String(difference);
+};
+
+const qualificationBadgeClasses = (status: string): string => {
+    if (status === 'direct') {
+        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+    }
+
+    if (status === 'repechage') {
+        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300';
+    }
+
+    return 'bg-muted text-muted-foreground';
 };
 </script>
 
@@ -117,6 +131,20 @@ const differenceLabel = (difference: number): string => {
                         <p class="mt-1 text-sm text-muted-foreground">
                             Odigrano {{ group.finished_matches_count }} / {{ group.matches_count }} mečeva.
                         </p>
+
+                        <div class="mt-3 flex flex-wrap gap-2 text-xs">
+                            <span class="inline-flex rounded-full bg-emerald-500/10 px-2.5 py-1 font-medium text-emerald-700 dark:text-emerald-300">
+                                Direktan prolaz
+                            </span>
+
+                            <span class="inline-flex rounded-full bg-yellow-500/10 px-2.5 py-1 font-medium text-yellow-700 dark:text-yellow-300">
+                                Repasaž
+                            </span>
+
+                            <span class="inline-flex rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
+                                Ispao
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -134,6 +162,7 @@ const differenceLabel = (difference: number): string => {
                                     <th class="px-3 py-3 text-center font-medium">Protiv</th>
                                     <th class="px-3 py-3 text-center font-medium">+/-</th>
                                     <th class="px-3 py-3 text-center font-medium">Bod</th>
+                                    <th class="px-3 py-3 text-center font-medium">Status</th>
                                 </tr>
                             </thead>
 
@@ -183,6 +212,14 @@ const differenceLabel = (difference: number): string => {
 
                                     <td class="px-3 py-3 text-center font-semibold">
                                         {{ row.standing_points }}
+                                    </td>
+                                    <td class="px-3 py-3 text-center">
+                                        <span
+                                            class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+                                            :class="qualificationBadgeClasses(row.qualification_status)"
+                                        >
+                                            {{ row.qualification_label }}
+                                        </span>
                                     </td>
                                 </tr>
                             </tbody>

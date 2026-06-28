@@ -29,12 +29,12 @@ class GroupStandingsCalculator
         ]);
 
         return $tournament->groups
-            ->map(fn (TournamentGroup $group) => $this->calculateGroup($group))
+            ->map(fn (TournamentGroup $group) => $this->calculateGroup($group, $tournament))
             ->values()
             ->all();
     }
 
-    private function calculateGroup(TournamentGroup $group): array
+    private function calculateGroup(TournamentGroup $group, Tournament $tournament): array
     {
         $rows = [];
 
@@ -114,8 +114,12 @@ class GroupStandingsCalculator
                 ['display_name', 'asc'],
             ])
             ->values()
-            ->map(function (array $row, int $index) {
-                $row['position'] = $index + 1;
+            ->map(function (array $row, int $index) use ($tournament) {
+                $position = $index + 1;
+
+                $row['position'] = $position;
+                $row['qualification_status'] = $this->qualificationStatus($tournament, $position);
+                $row['qualification_label'] = $this->qualificationLabel($row['qualification_status']);
 
                 return $row;
             })
@@ -147,5 +151,40 @@ class GroupStandingsCalculator
         }
 
         return 'Nepoznat učesnik';
+    }
+
+    private function qualificationStatus(Tournament $tournament, int $position): string
+    {
+        $directQualifiersPerGroup = (int) data_get(
+            $tournament->settings ?? [],
+            'direct_qualifiers_per_group',
+            0,
+        );
+
+        $repechageEnabled = (bool) data_get(
+            $tournament->settings ?? [],
+            'repechage_enabled',
+            false,
+        );
+
+        if ($directQualifiersPerGroup > 0 && $position <= $directQualifiersPerGroup) {
+            return 'direct';
+        }
+
+        if ($repechageEnabled) {
+            return 'repechage';
+        }
+
+        return 'eliminated';
+    }
+
+    private function qualificationLabel(string $status): string
+    {
+        return match ($status) {
+            'direct' => 'Direktan prolaz',
+            'repechage' => 'Repasaž',
+            'eliminated' => 'Ispao',
+            default => '-',
+        };
     }
 }
