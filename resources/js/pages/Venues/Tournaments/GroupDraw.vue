@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 
 type Venue = {
     id: number;
@@ -90,9 +90,48 @@ const form = useForm({
     group_position: '',
 });
 
+const playerSearch = ref('');
+const teamSearch = ref('');
+
 const groupSize = computed(() => props.tournament.settings.group_size ?? 0);
 const activeGroupPosition = computed(() => {
     return form.group_position || props.tournament.next_slot?.group_position || null;
+});
+
+const filteredAvailablePlayers = computed(() => {
+    const search = playerSearch.value.trim().toLowerCase();
+
+    if (!search) {
+        return props.available_players.slice(0, 8);
+    }
+
+    return props.available_players
+        .filter((player) => {
+            return player.display_name.toLowerCase().includes(search);
+        })
+        .slice(0, 8);
+});
+
+const filteredAvailableTeams = computed(() => {
+    const search = teamSearch.value.trim().toLowerCase();
+
+    if (!search) {
+        return props.available_teams.slice(0, 8);
+    }
+
+    return props.available_teams
+        .filter((team) => {
+            return team.name.toLowerCase().includes(search);
+        })
+        .slice(0, 8);
+});
+
+const selectedExistingPlayer = computed(() => {
+    return props.available_players.find((player) => player.id === form.existing_player_id);
+});
+
+const selectedExistingTeam = computed(() => {
+    return props.available_teams.find((team) => team.id === form.existing_team_id);
 });
 
 const participantForSlot = (
@@ -114,16 +153,13 @@ const clearSelectedSlot = () => {
     form.clearErrors('slot');
 };
 
-const selectExistingPlayer = () => {
-    const player = props.available_players.find((item) => item.id === form.existing_player_id);
-
-    if (!player) {
-        return;
-    }
-
+const chooseExistingPlayer = (player: AvailablePlayer) => {
+    form.existing_player_id = player.id;
     form.first_name = player.first_name;
     form.last_name = player.last_name;
     form.nickname = player.nickname ?? '';
+    playerSearch.value = player.display_name;
+    form.clearErrors('existing_player_id', 'first_name', 'last_name', 'nickname');
 };
 
 const clearExistingPlayer = () => {
@@ -131,21 +167,22 @@ const clearExistingPlayer = () => {
     form.first_name = '';
     form.last_name = '';
     form.nickname = '';
+    playerSearch.value = '';
+    form.clearErrors('existing_player_id', 'first_name', 'last_name', 'nickname');
 };
 
-const selectExistingTeam = () => {
-    const team = props.available_teams.find((item) => item.id === form.existing_team_id);
-
-    if (!team) {
-        return;
-    }
-
+const chooseExistingTeam = (team: AvailableTeam) => {
+    form.existing_team_id = team.id;
     form.team_name = team.name;
+    teamSearch.value = team.name;
+    form.clearErrors('existing_team_id', 'team_name');
 };
 
 const clearExistingTeam = () => {
     form.existing_team_id = null;
     form.team_name = '';
+    teamSearch.value = '';
+    form.clearErrors('existing_team_id', 'team_name');
 };
 
 const submit = () => {
@@ -154,6 +191,8 @@ const submit = () => {
         onSuccess: () => {
             form.reset();
             form.clearErrors();
+            playerSearch.value = '';
+            teamSearch.value = '';
         },
     });
 };
@@ -301,35 +340,54 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
 
                     <div>
                         <label class="text-sm font-medium">
-                            Izaberi postojećeg igrača
+                            Pretraga postojećeg igrača
                         </label>
 
-                        <select
-                            v-model="form.existing_player_id"
+                        <input
+                            v-model="playerSearch"
+                            type="text"
                             class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
-                            @change="selectExistingPlayer"
+                            placeholder="Kucaj ime, prezime ili nadimak..."
                         >
-                            <option :value="null">
-                                Novi igrač
-                            </option>
 
-                            <option
-                                v-for="player in available_players"
+                        <div
+                            v-if="playerSearch && filteredAvailablePlayers.length"
+                            class="mt-2 overflow-hidden rounded-lg border border-sidebar-border/70 dark:border-sidebar-border"
+                        >
+                            <button
+                                v-for="player in filteredAvailablePlayers"
                                 :key="player.id"
-                                :value="player.id"
+                                type="button"
+                                class="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
+                                @click="chooseExistingPlayer(player)"
                             >
                                 {{ player.display_name }}
-                            </option>
-                        </select>
+                            </button>
+                        </div>
 
-                        <button
-                            v-if="form.existing_player_id"
-                            type="button"
-                            class="mt-2 text-xs font-medium text-primary hover:underline"
-                            @click="clearExistingPlayer"
+                        <div
+                            v-if="playerSearch && !filteredAvailablePlayers.length && !selectedExistingPlayer"
+                            class="mt-2 rounded-lg border border-dashed border-sidebar-border/70 p-3 text-sm text-muted-foreground dark:border-sidebar-border"
                         >
-                            Očisti izbor i unesi novog igrača
-                        </button>
+                            Nema pronađenih igrača. Nastavi ručni unos ispod i napravićemo novog igrača.
+                        </div>
+
+                        <div
+                            v-if="selectedExistingPlayer"
+                            class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm"
+                        >
+                            <span>
+                                Izabran: <strong>{{ selectedExistingPlayer.display_name }}</strong>
+                            </span>
+
+                            <button
+                                type="button"
+                                class="text-xs font-medium text-primary hover:underline"
+                                @click="clearExistingPlayer"
+                            >
+                                Unesi novog
+                            </button>
+                        </div>
 
                         <p
                             v-if="form.errors.existing_player_id"
@@ -405,35 +463,54 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                 >
                     <div>
                         <label class="text-sm font-medium">
-                            Izaberi postojeću ekipu
+                            Pretraga postojeće ekipe
                         </label>
 
-                        <select
-                            v-model="form.existing_team_id"
+                        <input
+                            v-model="teamSearch"
+                            type="text"
                             class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
-                            @change="selectExistingTeam"
+                            placeholder="Kucaj naziv ekipe..."
                         >
-                            <option :value="null">
-                                Nova ekipa
-                            </option>
 
-                            <option
-                                v-for="team in available_teams"
+                        <div
+                            v-if="teamSearch && filteredAvailableTeams.length"
+                            class="mt-2 overflow-hidden rounded-lg border border-sidebar-border/70 dark:border-sidebar-border"
+                        >
+                            <button
+                                v-for="team in filteredAvailableTeams"
                                 :key="team.id"
-                                :value="team.id"
+                                type="button"
+                                class="block w-full px-3 py-2 text-left text-sm transition hover:bg-muted"
+                                @click="chooseExistingTeam(team)"
                             >
                                 {{ team.name }}
-                            </option>
-                        </select>
+                            </button>
+                        </div>
 
-                        <button
-                            v-if="form.existing_team_id"
-                            type="button"
-                            class="mt-2 text-xs font-medium text-primary hover:underline"
-                            @click="clearExistingTeam"
+                        <div
+                            v-if="teamSearch && !filteredAvailableTeams.length && !selectedExistingTeam"
+                            class="mt-2 rounded-lg border border-dashed border-sidebar-border/70 p-3 text-sm text-muted-foreground dark:border-sidebar-border"
                         >
-                            Očisti izbor i unesi novu ekipu
-                        </button>
+                            Nema pronađenih ekipa. Nastavi ručni unos ispod i napravićemo novu ekipu.
+                        </div>
+
+                        <div
+                            v-if="selectedExistingTeam"
+                            class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm"
+                        >
+                            <span>
+                                Izabrana ekipa: <strong>{{ selectedExistingTeam.name }}</strong>
+                            </span>
+
+                            <button
+                                type="button"
+                                class="text-xs font-medium text-primary hover:underline"
+                                @click="clearExistingTeam"
+                            >
+                                Unesi novu
+                            </button>
+                        </div>
 
                         <p
                             v-if="form.errors.existing_team_id"
