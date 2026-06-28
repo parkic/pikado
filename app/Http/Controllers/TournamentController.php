@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\GameType;
 use App\Enums\GroupRounds;
 use App\Enums\MatchMode;
+use App\Enums\MatchStage;
 use App\Enums\ScoringMode;
 use App\Enums\TournamentStatus;
 use Illuminate\Http\RedirectResponse;
@@ -14,6 +15,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+
+use App\Services\GroupMatchGenerator;
 
 use App\Models\Tournament;
 use App\Models\TournamentResource;
@@ -135,6 +138,8 @@ class TournamentController extends Controller
         $tournament->loadCount([
             'groups',
             'participants',
+            'matches as group_matches_count' => fn ($query) => $query
+                ->where('stage', MatchStage::GROUP->value),
         ]);
 
         $totalSlots = $this->totalGroupSlots($tournament);
@@ -166,8 +171,10 @@ class TournamentController extends Controller
                 'groups_count' => $tournament->groups_count,
                 'participants_count' => $tournament->participants_count,
                 'total_slots' => $totalSlots,
+                'group_matches_count' => $tournament->group_matches_count,
                 'can_start_group_draw' => $this->canStartGroupDraw($tournament, $totalSlots),
                 'can_mark_ready' => $this->canMarkReady($tournament, $totalSlots),
+                'can_generate_group_matches' => $this->canGenerateGroupMatches($tournament, $totalSlots),
                 'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
@@ -348,6 +355,36 @@ class TournamentController extends Controller
         return redirect()
             ->route('venues.tournaments.show', [$venue, $tournament])
             ->with('success', 'Turnir je označen kao spreman.');
+    }
+
+    public function generateGroupMatches(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        GroupMatchGenerator $generator
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        $totalSlots = $this->totalGroupSlots($tournament);
+
+        if (! $this->canGenerateGroupMatches($tournament, $totalSlots)) {
+            return back()->withErrors([
+                'matches' => 'Grupni mečevi ne mogu da se generišu. Turnir mora biti spreman, grupe popunjene i bez već generisanih grupnih mečeva.',
+            ]);
+        }
+
+        $createdMatches = $generator->generate($tournament);
+
+        $tournament->update([
+            'status' => TournamentStatus::GROUP_STAGE,
+        ]);
+
+        return redirect()
+            ->route('venues.tournaments.show', [$venue, $tournament])
+            ->with('success', 'Generisano grupnih mečeva: ' . $createdMatches . '.');
     }
 
     public function store(Request $request, Venue $venue): RedirectResponse
@@ -588,5 +625,24 @@ class TournamentController extends Controller
         }
 
         return $tournament->participants()->count() >= $totalSlots;
+    }
+
+    private function canGenerateGroupMatches(Tournament $tournament, int $totalSlots): bool
+    {
+        if ($tournament->status !== TournamentStatus::READY) {
+            return false;
+        }
+
+        if ($totalSlots < 1) {
+            return false;
+        }
+
+        if ($tournament->participants()->count() < $totalSlots) {
+            return false;
+        }
+
+        return ! $tournament->matches()
+            ->where('stage', MatchStage::GROUP->value)
+            ->exists();
     }
 }

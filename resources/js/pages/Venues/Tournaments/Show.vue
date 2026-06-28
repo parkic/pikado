@@ -62,8 +62,10 @@ type Tournament = {
     groups: TournamentGroup[];
     participants_count: number;
     total_slots: number;
+    group_matches_count: number;
     can_start_group_draw: boolean;
     can_mark_ready: boolean;
+    can_generate_group_matches: boolean;
     resources: TournamentResource[];
 };
 
@@ -113,6 +115,16 @@ const markReady = () => {
     }
 
     router.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/mark-ready`);
+};
+
+const generateGroupMatches = () => {
+    const confirmed = window.confirm('Da li želiš da generišeš grupne mečeve?');
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/generate-group-matches`);
 };
 
 const participantForSlot = (
@@ -192,10 +204,19 @@ const participantForSlot = (
                 >
                     Označi kao spreman
                 </button>
+
+                <button
+                    v-if="tournament.can_generate_group_matches"
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                    @click="generateGroupMatches"
+                >
+                    Generiši grupne mečeve
+                </button>
             </div>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
             <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
                 <p class="text-sm text-muted-foreground">
                     Igra
@@ -233,6 +254,16 @@ const participantForSlot = (
 
                 <p class="mt-2 text-lg font-medium">
                     {{ tournament.participants_count }} / {{ tournament.total_slots }}
+                </p>
+            </div>
+
+            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                <p class="text-sm text-muted-foreground">
+                    Grupni mečevi
+                </p>
+
+                <p class="mt-2 text-lg font-medium">
+                    {{ tournament.group_matches_count }}
                 </p>
             </div>
 
@@ -292,8 +323,17 @@ const participantForSlot = (
             </h2>
 
             <p class="mt-1 text-sm">
-                Grupe su popunjene i sledeći korak je generisanje grupnih mečeva.
+                Grupe su popunjene. Sledeći korak je generisanje grupnih mečeva.
             </p>
+
+            <button
+                v-if="tournament.can_generate_group_matches"
+                type="button"
+                class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                @click="generateGroupMatches"
+            >
+                Generiši grupne mečeve
+            </button>
         </div>
 
         <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">

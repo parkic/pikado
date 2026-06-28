@@ -126,6 +126,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/mark-ready', [TournamentController::class, 'markReady'])
         ->scopeBindings()
         ->name('venues.tournaments.mark_ready');
+    Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/generate-group-matches', [TournamentController::class, 'generateGroupMatches'])
+        ->scopeBindings()
+        ->name('venues.tournaments.generate_group_matches');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 
