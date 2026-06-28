@@ -8,6 +8,19 @@ type Venue = {
     slug: string;
 };
 
+type AvailablePlayer = {
+    id: number;
+    first_name: string;
+    last_name: string;
+    nickname: string | null;
+    display_name: string;
+};
+
+type AvailableTeam = {
+    id: number;
+    name: string;
+};
+
 type TournamentGroupParticipant = {
     id: number;
     participant_type: string;
@@ -52,6 +65,8 @@ type Tournament = {
 const props = defineProps<{
     venue: Venue;
     tournament: Tournament;
+    available_players: AvailablePlayer[];
+    available_teams: AvailableTeam[];
 }>();
 
 defineOptions({
@@ -66,6 +81,8 @@ defineOptions({
 });
 
 const form = useForm({
+    existing_player_id: null as number | null,
+    existing_team_id: null as number | null,
     first_name: '',
     last_name: '',
     nickname: '',
@@ -93,6 +110,40 @@ const selectSlot = (groupName: string, slotNumber: number) => {
 
 const clearSelectedSlot = () => {
     form.group_position = '';
+};
+
+const selectExistingPlayer = () => {
+    const player = props.available_players.find((item) => item.id === form.existing_player_id);
+
+    if (!player) {
+        return;
+    }
+
+    form.first_name = player.first_name;
+    form.last_name = player.last_name;
+    form.nickname = player.nickname ?? '';
+};
+
+const clearExistingPlayer = () => {
+    form.existing_player_id = null;
+    form.first_name = '';
+    form.last_name = '';
+    form.nickname = '';
+};
+
+const selectExistingTeam = () => {
+    const team = props.available_teams.find((item) => item.id === form.existing_team_id);
+
+    if (!team) {
+        return;
+    }
+
+    form.team_name = team.name;
+};
+
+const clearExistingTeam = () => {
+    form.existing_team_id = null;
+    form.team_name = '';
 };
 
 const submit = () => {
@@ -239,6 +290,46 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                     v-if="activeGroupPosition && tournament.match_mode === 'singles'"
                     class="mt-5 space-y-4"
                 >
+
+                    <div>
+                        <label class="text-sm font-medium">
+                            Izaberi postojećeg igrača
+                        </label>
+
+                        <select
+                            v-model="form.existing_player_id"
+                            class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                            @change="selectExistingPlayer"
+                        >
+                            <option :value="null">
+                                Novi igrač
+                            </option>
+
+                            <option
+                                v-for="player in available_players"
+                                :key="player.id"
+                                :value="player.id"
+                            >
+                                {{ player.display_name }}
+                            </option>
+                        </select>
+
+                        <button
+                            v-if="form.existing_player_id"
+                            type="button"
+                            class="mt-2 text-xs font-medium text-primary hover:underline"
+                            @click="clearExistingPlayer"
+                        >
+                            Očisti izbor i unesi novog igrača
+                        </button>
+
+                        <p
+                            v-if="form.errors.existing_player_id"
+                            class="mt-1 text-sm text-red-600"
+                        >
+                            {{ form.errors.existing_player_id }}
+                        </p>
+                    </div>
                     <div>
                         <label class="text-sm font-medium">
                             Ime
@@ -304,6 +395,46 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                     v-if="activeGroupPosition && tournament.match_mode === 'doubles'"
                     class="mt-5 space-y-4"
                 >
+                    <div>
+                        <label class="text-sm font-medium">
+                            Izaberi postojeću ekipu
+                        </label>
+
+                        <select
+                            v-model="form.existing_team_id"
+                            class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                            @change="selectExistingTeam"
+                        >
+                            <option :value="null">
+                                Nova ekipa
+                            </option>
+
+                            <option
+                                v-for="team in available_teams"
+                                :key="team.id"
+                                :value="team.id"
+                            >
+                                {{ team.name }}
+                            </option>
+                        </select>
+
+                        <button
+                            v-if="form.existing_team_id"
+                            type="button"
+                            class="mt-2 text-xs font-medium text-primary hover:underline"
+                            @click="clearExistingTeam"
+                        >
+                            Očisti izbor i unesi novu ekipu
+                        </button>
+
+                        <p
+                            v-if="form.errors.existing_team_id"
+                            class="mt-1 text-sm text-red-600"
+                        >
+                            {{ form.errors.existing_team_id }}
+                        </p>
+                    </div>
+
                     <div>
                         <label class="text-sm font-medium">
                             Naziv ekipe

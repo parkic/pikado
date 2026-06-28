@@ -66,6 +66,8 @@ class TournamentGroupDrawController extends Controller
                     ]),
                 ]),
             ],
+            'available_players' => $this->availablePlayers($venue, $tournament),
+            'available_teams' => $this->availableTeams($venue, $tournament),
         ]);
     }
 
@@ -104,15 +106,17 @@ class TournamentGroupDrawController extends Controller
 
         if ($tournament->match_mode === MatchMode::SINGLES) {
             $validated = $request->validate([
-                'first_name' => ['required', 'string', 'max:255'],
-                'last_name' => ['required', 'string', 'max:255'],
+                'existing_player_id' => ['nullable', 'integer'],
+                'first_name' => ['required_without:existing_player_id', 'nullable', 'string', 'max:255'],
+                'last_name' => ['required_without:existing_player_id', 'nullable', 'string', 'max:255'],
                 'nickname' => ['nullable', 'string', 'max:255'],
             ]);
 
             $this->storePlayerParticipant($venue, $tournament, $targetSlot, $validated);
         } else {
             $validated = $request->validate([
-                'team_name' => ['required', 'string', 'max:255'],
+                'existing_team_id' => ['nullable', 'integer'],
+                'team_name' => ['required_without:existing_team_id', 'nullable', 'string', 'max:255'],
             ]);
 
             $this->storeTeamParticipant($venue, $tournament, $targetSlot, $validated);
@@ -224,7 +228,8 @@ class TournamentGroupDrawController extends Controller
             abort_unless($participant->team !== null, 404);
 
             $validated = $request->validate([
-                'team_name' => ['required', 'string', 'max:255'],
+                'existing_team_id' => ['nullable', 'integer'],
+                'team_name' => ['required_without:existing_team_id', 'nullable', 'string', 'max:255'],
             ]);
 
             $participant->team->update([
@@ -239,34 +244,43 @@ class TournamentGroupDrawController extends Controller
 
     private function storePlayerParticipant(Venue $venue, Tournament $tournament, array $nextSlot, array $validated): void
     {
-        $firstName = trim($validated['first_name']);
-        $lastName = trim($validated['last_name']);
-        $nickname = isset($validated['nickname']) && trim($validated['nickname']) !== ''
-            ? trim($validated['nickname'])
-            : null;
+        DB::transaction(function () use ($venue, $tournament, $nextSlot, $validated): void {
+            $existingPlayerId = $validated['existing_player_id'] ?? null;
 
-        DB::transaction(function () use ($venue, $tournament, $nextSlot, $firstName, $lastName, $nickname): void {
-            $playerQuery = Player::query()
-                ->where('venue_id', $venue->id)
-                ->where('first_name', $firstName)
-                ->where('last_name', $lastName);
-
-            if ($nickname === null) {
-                $playerQuery->whereNull('nickname');
+            if ($existingPlayerId) {
+                $player = Player::query()
+                    ->where('venue_id', $venue->id)
+                    ->where('is_active', true)
+                    ->findOrFail($existingPlayerId);
             } else {
-                $playerQuery->where('nickname', $nickname);
-            }
+                $firstName = trim((string) ($validated['first_name'] ?? ''));
+                $lastName = trim((string) ($validated['last_name'] ?? ''));
+                $nickname = isset($validated['nickname']) && trim((string) $validated['nickname']) !== ''
+                    ? trim((string) $validated['nickname'])
+                    : null;
 
-            $player = $playerQuery->first();
+                $playerQuery = Player::query()
+                    ->where('venue_id', $venue->id)
+                    ->where('first_name', $firstName)
+                    ->where('last_name', $lastName);
 
-            if (! $player) {
-                $player = Player::create([
-                    'venue_id' => $venue->id,
-                    'first_name' => $firstName,
-                    'last_name' => $lastName,
-                    'nickname' => $nickname,
-                    'is_active' => true,
-                ]);
+                if ($nickname === null) {
+                    $playerQuery->whereNull('nickname');
+                } else {
+                    $playerQuery->where('nickname', $nickname);
+                }
+
+                $player = $playerQuery->first();
+
+                if (! $player) {
+                    $player = Player::create([
+                        'venue_id' => $venue->id,
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                        'nickname' => $nickname,
+                        'is_active' => true,
+                    ]);
+                }
             }
 
             if (
@@ -276,6 +290,7 @@ class TournamentGroupDrawController extends Controller
                     ->exists()
             ) {
                 throw ValidationException::withMessages([
+                    'existing_player_id' => 'Ovaj igrač je već dodat u turnir.',
                     'first_name' => 'Ovaj igrač je već dodat u turnir.',
                 ]);
             }
@@ -320,20 +335,29 @@ class TournamentGroupDrawController extends Controller
 
     private function storeTeamParticipant(Venue $venue, Tournament $tournament, array $nextSlot, array $validated): void
     {
-        $teamName = trim($validated['team_name']);
+        DB::transaction(function () use ($venue, $tournament, $nextSlot, $validated): void {
+            $existingTeamId = $validated['existing_team_id'] ?? null;
 
-        DB::transaction(function () use ($venue, $tournament, $nextSlot, $teamName): void {
-            $team = Team::query()
-                ->where('venue_id', $venue->id)
-                ->where('name', $teamName)
-                ->first();
+            if ($existingTeamId) {
+                $team = Team::query()
+                    ->where('venue_id', $venue->id)
+                    ->where('is_active', true)
+                    ->findOrFail($existingTeamId);
+            } else {
+                $teamName = trim((string) ($validated['team_name'] ?? ''));
 
-            if (! $team) {
-                $team = Team::create([
-                    'venue_id' => $venue->id,
-                    'name' => $teamName,
-                    'is_active' => true,
-                ]);
+                $team = Team::query()
+                    ->where('venue_id', $venue->id)
+                    ->where('name', $teamName)
+                    ->first();
+
+                if (! $team) {
+                    $team = Team::create([
+                        'venue_id' => $venue->id,
+                        'name' => $teamName,
+                        'is_active' => true,
+                    ]);
+                }
             }
 
             if (
@@ -343,6 +367,7 @@ class TournamentGroupDrawController extends Controller
                     ->exists()
             ) {
                 throw ValidationException::withMessages([
+                    'existing_team_id' => 'Ova ekipa je već dodata u turnir.',
                     'team_name' => 'Ova ekipa je već dodata u turnir.',
                 ]);
             }
@@ -487,5 +512,53 @@ class TournamentGroupDrawController extends Controller
             'slot_number' => $slotNumber,
             'group_position' => $groupName . $slotNumber,
         ];
+    }
+
+    private function availablePlayers(Venue $venue, Tournament $tournament): array
+    {
+        $usedPlayerIds = $tournament->participants()
+            ->where('participant_type', ParticipantType::PLAYER->value)
+            ->whereNotNull('player_id')
+            ->pluck('player_id');
+
+        return Player::query()
+            ->where('venue_id', $venue->id)
+            ->where('is_active', true)
+            ->whereNotIn('id', $usedPlayerIds)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->orderBy('nickname')
+            ->get()
+            ->map(fn (Player $player) => [
+                'id' => $player->id,
+                'first_name' => $player->first_name,
+                'last_name' => $player->last_name,
+                'nickname' => $player->nickname,
+                'display_name' => trim($player->first_name . ' ' . $player->last_name)
+                    . ($player->nickname ? ' (' . $player->nickname . ')' : ''),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function availableTeams(Venue $venue, Tournament $tournament): array
+    {
+        $usedTeamIds = $tournament->participants()
+            ->where('participant_type', ParticipantType::TEAM->value)
+            ->whereNotNull('team_id')
+            ->pluck('team_id');
+
+        return Team::query()
+            ->where('venue_id', $venue->id)
+            ->where('is_active', true)
+            ->whereNotIn('id', $usedTeamIds)
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Team $team) => [
+                'id' => $team->id,
+                'name' => $team->name,
+            ])
+            ->values()
+            ->all();
     }
 }
