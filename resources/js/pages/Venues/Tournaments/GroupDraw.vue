@@ -98,6 +98,16 @@ const activeGroupPosition = computed(() => {
     return form.group_position || props.tournament.next_slot?.group_position || null;
 });
 
+const isGroupDrawComplete = computed(() => {
+    return props.tournament.total_slots > 0
+        && props.tournament.participants_count >= props.tournament.total_slots
+        && !props.tournament.next_slot;
+});
+
+const hasGroupSetup = computed(() => {
+    return props.tournament.total_slots > 0;
+});
+
 const filteredAvailablePlayers = computed(() => {
     const search = playerSearch.value.trim().toLowerCase();
 
@@ -284,8 +294,58 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
             </div>
         </div>
 
+        <div
+            v-if="isGroupDrawComplete"
+            class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
+        >
+            <h2 class="text-lg font-medium">
+                Group Draw je završen
+            </h2>
+
+            <p class="mt-1 text-sm">
+                Sva mesta u grupama su popunjena. Možeš da se vratiš na pregled turnira ili da pregledaš grupe ispod.
+            </p>
+
+            <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                <Link
+                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}`"
+                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                >
+                    Nazad na turnir
+                </Link>
+
+                <a
+                    href="#groups-preview"
+                    class="inline-flex items-center justify-center rounded-lg border border-emerald-500/30 px-4 py-2 text-sm font-medium transition hover:bg-emerald-500/10"
+                >
+                    Pregled grupa
+                </a>
+            </div>
+        </div>
+
+        <div
+            v-else-if="!hasGroupSetup"
+            class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
+        >
+            <h2 class="text-lg font-medium">
+                Grupe nisu podešene
+            </h2>
+
+            <p class="mt-1 text-sm">
+                Pre unosa učesnika moraš da podesiš broj grupa i broj mesta po grupi.
+            </p>
+
+            <Link
+                :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/groups/setup`"
+                class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            >
+                Setup grupa
+            </Link>
+        </div>
+
         <div class="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
             <form
+                v-if="!isGroupDrawComplete && hasGroupSetup"
                 class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border xl:sticky xl:top-4 xl:self-start"
                 @submit.prevent="submit"
             >
@@ -556,7 +616,37 @@ const removeParticipant = (participant: TournamentGroupParticipant | undefined) 
                 </button>
             </form>
 
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+            <div
+                v-else
+                class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border xl:sticky xl:top-4 xl:self-start"
+            >
+                <h2 class="text-lg font-medium">
+                    Unos učesnika
+                </h2>
+
+                <p class="mt-2 text-sm text-muted-foreground">
+                    <template v-if="isGroupDrawComplete">
+                        Sva mesta su popunjena. Ako treba da promeniš nekoga, koristi opcije Izmeni ili Ukloni u grupama.
+                    </template>
+
+                    <template v-else>
+                        Prvo podesi grupe da bi unos učesnika bio dostupan.
+                    </template>
+                </p>
+
+                <Link
+                    v-if="!hasGroupSetup"
+                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/groups/setup`"
+                    class="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                >
+                    Setup grupa
+                </Link>
+            </div>
+
+            <div
+                id="groups-preview"
+                class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+            >
                 <div>
                     <h2 class="text-lg font-medium">
                         Grupe
