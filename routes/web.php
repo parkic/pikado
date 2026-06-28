@@ -120,6 +120,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('venues/{venue:slug}/tournaments/{tournament:slug}/group-draw/participants/{participant}', [TournamentGroupDrawController::class, 'updateParticipant'])
         ->scopeBindings()
         ->name('venues.tournaments.group_draw.participants.update');
+    Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/start-group-draw', [TournamentController::class, 'startGroupDraw'])
+        ->scopeBindings()
+        ->name('venues.tournaments.start_group_draw');
+    Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/mark-ready', [TournamentController::class, 'markReady'])
+        ->scopeBindings()
+        ->name('venues.tournaments.mark_ready');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 

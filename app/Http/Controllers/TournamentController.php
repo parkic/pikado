@@ -137,6 +137,8 @@ class TournamentController extends Controller
             'participants',
         ]);
 
+        $totalSlots = $this->totalGroupSlots($tournament);
+
         return Inertia::render('Venues/Tournaments/Show', [
             'venue' => [
                 'id' => $venue->id,
@@ -163,6 +165,9 @@ class TournamentController extends Controller
                 'created_at' => $tournament->created_at?->format('d.m.Y. H:i'),
                 'groups_count' => $tournament->groups_count,
                 'participants_count' => $tournament->participants_count,
+                'total_slots' => $totalSlots,
+                'can_start_group_draw' => $this->canStartGroupDraw($tournament, $totalSlots),
+                'can_mark_ready' => $this->canMarkReady($tournament, $totalSlots),
                 'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
@@ -295,6 +300,54 @@ class TournamentController extends Controller
         return redirect()
             ->route('venues.tournaments.show', [$venue, $tournament])
             ->with('success', 'Grupe su sačuvane.');
+    }
+
+    public function startGroupDraw(Request $request, Venue $venue, Tournament $tournament): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        $totalSlots = $this->totalGroupSlots($tournament);
+
+        if (! $this->canStartGroupDraw($tournament, $totalSlots)) {
+            return back()->withErrors([
+                'status' => 'Group Draw ne može da se pokrene dok grupe nisu podešene ili status turnira nije validan.',
+            ]);
+        }
+
+        $tournament->update([
+            'status' => TournamentStatus::GROUP_DRAW,
+        ]);
+
+        return redirect()
+            ->route('venues.tournaments.show', [$venue, $tournament])
+            ->with('success', 'Group Draw je pokrenut.');
+    }
+
+    public function markReady(Request $request, Venue $venue, Tournament $tournament): RedirectResponse
+    {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        $totalSlots = $this->totalGroupSlots($tournament);
+
+        if (! $this->canMarkReady($tournament, $totalSlots)) {
+            return back()->withErrors([
+                'status' => 'Turnir ne može biti označen kao spreman dok sva mesta u grupama nisu popunjena.',
+            ]);
+        }
+
+        $tournament->update([
+            'status' => TournamentStatus::READY,
+        ]);
+
+        return redirect()
+            ->route('venues.tournaments.show', [$venue, $tournament])
+            ->with('success', 'Turnir je označen kao spreman.');
     }
 
     public function store(Request $request, Venue $venue): RedirectResponse
@@ -498,5 +551,42 @@ class TournamentController extends Controller
         }
 
         return 'Nepoznat učesnik';
+    }
+
+    private function totalGroupSlots(Tournament $tournament): int
+    {
+        $groupSize = (int) data_get($tournament->settings ?? [], 'group_size', 0);
+
+        if ($groupSize < 1) {
+            return 0;
+        }
+
+        return $tournament->groups()->count() * $groupSize;
+    }
+
+    private function canStartGroupDraw(Tournament $tournament, int $totalSlots): bool
+    {
+        return $totalSlots > 0
+            && in_array($tournament->status, [
+                TournamentStatus::DRAFT,
+                TournamentStatus::GROUP_DRAW,
+            ], true);
+    }
+
+    private function canMarkReady(Tournament $tournament, int $totalSlots): bool
+    {
+        if ($totalSlots < 1) {
+            return false;
+        }
+
+        if (! in_array($tournament->status, [
+            TournamentStatus::DRAFT,
+            TournamentStatus::GROUP_DRAW,
+            TournamentStatus::READY,
+        ], true)) {
+            return false;
+        }
+
+        return $tournament->participants()->count() >= $totalSlots;
     }
 }

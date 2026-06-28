@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 type Venue = {
     id: number;
@@ -61,10 +61,13 @@ type Tournament = {
     groups_count: number;
     groups: TournamentGroup[];
     participants_count: number;
+    total_slots: number;
+    can_start_group_draw: boolean;
+    can_mark_ready: boolean;
     resources: TournamentResource[];
 };
 
-defineProps<{
+const props = defineProps<{
     venue: Venue;
     tournament: Tournament;
 }>();
@@ -90,6 +93,26 @@ const statusBadgeClasses = (status: string): string => {
     }
 
     return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+};
+
+const startGroupDraw = () => {
+    const confirmed = window.confirm('Da li želiš da pokreneš Group Draw za ovaj turnir?');
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/start-group-draw`);
+};
+
+const markReady = () => {
+    const confirmed = window.confirm('Da li želiš da označiš turnir kao spreman?');
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/mark-ready`);
 };
 
 const participantForSlot = (
@@ -151,6 +174,24 @@ const participantForSlot = (
                 >
                     Group Draw
                 </Link>
+
+                <button
+                    v-if="tournament.can_start_group_draw && tournament.status === 'draft'"
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+                    @click="startGroupDraw"
+                >
+                    Pokreni Group Draw
+                </button>
+
+                <button
+                    v-if="tournament.can_mark_ready && tournament.status !== 'ready'"
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                    @click="markReady"
+                >
+                    Označi kao spreman
+                </button>
             </div>
         </div>
 
@@ -191,7 +232,7 @@ const participantForSlot = (
                 </p>
 
                 <p class="mt-2 text-lg font-medium">
-                    {{ tournament.participants_count }}
+                    {{ tournament.participants_count }} / {{ tournament.total_slots }}
                 </p>
             </div>
 
@@ -214,6 +255,45 @@ const participantForSlot = (
                     {{ tournament.public_code }}
                 </p>
             </div>
+        </div>
+
+        <div
+            v-if="tournament.status === 'draft'"
+            class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
+        >
+            <h2 class="text-lg font-medium">
+                Turnir je u draft statusu
+            </h2>
+
+            <p class="mt-1 text-sm">
+                Podesi grupe i pokreni Group Draw kada budeš spreman za izvlačenje učesnika.
+            </p>
+        </div>
+
+        <div
+            v-else-if="tournament.status === 'group_draw'"
+            class="rounded-xl border border-primary/30 bg-primary/5 p-4"
+        >
+            <h2 class="text-lg font-medium">
+                Group Draw je aktivan
+            </h2>
+
+            <p class="mt-1 text-sm text-muted-foreground">
+                Popuni sva mesta u grupama. Kada sva mesta budu popunjena, možeš označiti turnir kao spreman.
+            </p>
+        </div>
+
+        <div
+            v-else-if="tournament.status === 'ready'"
+            class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
+        >
+            <h2 class="text-lg font-medium">
+                Turnir je spreman
+            </h2>
+
+            <p class="mt-1 text-sm">
+                Grupe su popunjene i sledeći korak je generisanje grupnih mečeva.
+            </p>
         </div>
 
         <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
