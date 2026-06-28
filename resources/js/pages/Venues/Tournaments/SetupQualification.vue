@@ -11,6 +11,7 @@ type TournamentSettings = {
     direct_qualifiers_per_group?: number | null;
     repechage_enabled?: boolean;
     repechage_qualifiers_count?: number | null;
+    repechage_participants_count?: number | null;
 };
 
 type Tournament = {
@@ -41,6 +42,7 @@ defineOptions({
 const form = useForm({
     direct_qualifiers_per_group: props.tournament.settings.direct_qualifiers_per_group ?? 2,
     repechage_enabled: props.tournament.settings.repechage_enabled ?? true,
+    repechage_participants_count: props.tournament.settings.repechage_participants_count ?? null,
     repechage_qualifiers_count: props.tournament.settings.repechage_qualifiers_count ?? null,
 });
 
@@ -156,6 +158,32 @@ const submit = () => {
 
                     <div>
                         <label class="text-sm font-medium">
+                            Ukupno učesnika ide u repasaž
+                        </label>
+
+                        <input
+                            v-model="form.repechage_participants_count"
+                            type="number"
+                            min="0"
+                            max="128"
+                            class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                            placeholder="Primer: 8"
+                        >
+
+                        <p class="mt-1 text-xs text-muted-foreground">
+                            Ovaj broj se deli ravnomerno po grupama. Primer: 8 grupa i ukupno 8 u repasažu znači da iz svake grupe još 1 učesnik ide u repasaž.
+                        </p>
+
+                        <p
+                            v-if="form.errors.repechage_participants_count"
+                            class="mt-1 text-sm text-red-600"
+                        >
+                            {{ form.errors.repechage_participants_count }}
+                        </p>
+                    </div>
+
+                    <div>
+                        <label class="text-sm font-medium">
                             Broj učesnika koji prolazi iz repasaža
                         </label>
 
@@ -223,6 +251,31 @@ const submit = () => {
                     <div class="flex justify-between gap-4">
                         <span class="text-muted-foreground">Repasaž</span>
                         <span class="font-medium">{{ form.repechage_enabled ? 'Da' : 'Ne' }}</span>
+                    </div>
+
+                    <div class="flex justify-between gap-4">
+                        <span class="text-muted-foreground">Ukupno u repasažu</span>
+                        <span class="font-medium">{{ form.repechage_participants_count ?? '-' }}</span>
+                    </div>
+
+                    <div class="flex justify-between gap-4">
+                        <span class="text-muted-foreground">Repasaž po grupi</span>
+                        <span class="font-medium">
+                            <template
+                                v-if="
+                                    form.repechage_enabled
+                                        && form.repechage_participants_count
+                                        && tournament.groups_count > 0
+                                        && Number(form.repechage_participants_count) % tournament.groups_count === 0
+                                "
+                            >
+                                {{ Number(form.repechage_participants_count) / tournament.groups_count }}
+                            </template>
+
+                            <template v-else>
+                                -
+                            </template>
+                        </span>
                     </div>
 
                     <div class="flex justify-between gap-4">

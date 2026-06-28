@@ -8,6 +8,7 @@ use App\Models\Tournament;
 use App\Models\TournamentGroup;
 use App\Models\TournamentMatch;
 use App\Models\TournamentParticipant;
+use Illuminate\Support\Collection;
 
 class GroupStandingsCalculator
 {
@@ -28,13 +29,16 @@ class GroupStandingsCalculator
                 ->orderBy('id'),
         ]);
 
-        return $tournament->groups
-            ->map(fn (TournamentGroup $group) => $this->calculateGroup($group, $tournament))
+        $groups = $tournament->groups
+            ->map(fn (TournamentGroup $group) => $this->calculateGroup($group))
+            ->values();
+
+        return $this->applyQualificationStatuses($groups, $tournament)
             ->values()
             ->all();
     }
 
-    private function calculateGroup(TournamentGroup $group, Tournament $tournament): array
+    private function calculateGroup(TournamentGroup $group): array
     {
         $rows = [];
 
@@ -114,12 +118,10 @@ class GroupStandingsCalculator
                 ['display_name', 'asc'],
             ])
             ->values()
-            ->map(function (array $row, int $index) use ($tournament) {
-                $position = $index + 1;
-
-                $row['position'] = $position;
-                $row['qualification_status'] = $this->qualificationStatus($tournament, $position);
-                $row['qualification_label'] = $this->qualificationLabel($row['qualification_status']);
+            ->map(function (array $row, int $index) {
+                $row['position'] = $index + 1;
+                $row['qualification_status'] = 'eliminated';
+                $row['qualification_label'] = 'Ispao';
 
                 return $row;
             })
@@ -132,6 +134,76 @@ class GroupStandingsCalculator
             'finished_matches_count' => $finishedMatches->count(),
             'rows' => $sortedRows,
         ];
+    }
+
+    /**
+     * @param Collection<int, array<string, mixed>> $groups
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function applyQualificationStatuses(Collection $groups, Tournament $tournament): Collection
+    {
+        $settings = $tournament->settings ?? [];
+
+        $directQualifiersPerGroup = (int) data_get($settings, 'direct_qualifiers_per_group', 0);
+        $repechageEnabled = (bool) data_get($settings, 'repechage_enabled', false);
+        $repechageParticipantsCount = (int) data_get($settings, 'repechage_participants_count', 0);
+
+        $groupsCount = $groups->count();
+
+        $repechagePerGroup = 0;
+
+        if (
+            $repechageEnabled
+            && $groupsCount > 0
+            && $repechageParticipantsCount > 0
+            && $repechageParticipantsCount % $groupsCount === 0
+        ) {
+            $repechagePerGroup = (int) ($repechageParticipantsCount / $groupsCount);
+        }
+
+        return $groups->map(function (array $group) use (
+            $directQualifiersPerGroup,
+            $repechageEnabled,
+            $repechagePerGroup
+        ) {
+            $group['rows'] = collect($group['rows'])
+                ->map(function (array $row) use (
+                    $directQualifiersPerGroup,
+                    $repechageEnabled,
+                    $repechagePerGroup
+                ) {
+                    if ($directQualifiersPerGroup > 0 && $row['position'] <= $directQualifiersPerGroup) {
+                        $row['qualification_status'] = 'direct';
+                        $row['qualification_label'] = 'Direktan prolaz';
+
+                        return $row;
+                    }
+
+                    $firstRepechagePosition = $directQualifiersPerGroup + 1;
+                    $lastRepechagePosition = $directQualifiersPerGroup + $repechagePerGroup;
+
+                    if (
+                        $repechageEnabled
+                        && $repechagePerGroup > 0
+                        && $row['position'] >= $firstRepechagePosition
+                        && $row['position'] <= $lastRepechagePosition
+                    ) {
+                        $row['qualification_status'] = 'repechage';
+                        $row['qualification_label'] = 'Repasaž';
+
+                        return $row;
+                    }
+
+                    $row['qualification_status'] = 'eliminated';
+                    $row['qualification_label'] = 'Ispao';
+
+                    return $row;
+                })
+                ->values()
+                ->all();
+
+            return $group;
+        });
     }
 
     private function participantDisplayName(TournamentParticipant $participant): string
@@ -151,40 +223,5 @@ class GroupStandingsCalculator
         }
 
         return 'Nepoznat učesnik';
-    }
-
-    private function qualificationStatus(Tournament $tournament, int $position): string
-    {
-        $directQualifiersPerGroup = (int) data_get(
-            $tournament->settings ?? [],
-            'direct_qualifiers_per_group',
-            0,
-        );
-
-        $repechageEnabled = (bool) data_get(
-            $tournament->settings ?? [],
-            'repechage_enabled',
-            false,
-        );
-
-        if ($directQualifiersPerGroup > 0 && $position <= $directQualifiersPerGroup) {
-            return 'direct';
-        }
-
-        if ($repechageEnabled) {
-            return 'repechage';
-        }
-
-        return 'eliminated';
-    }
-
-    private function qualificationLabel(string $status): string
-    {
-        return match ($status) {
-            'direct' => 'Direktan prolaz',
-            'repechage' => 'Repasaž',
-            'eliminated' => 'Ispao',
-            default => '-',
-        };
     }
 }

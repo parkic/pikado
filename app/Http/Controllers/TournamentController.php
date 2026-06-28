@@ -350,13 +350,49 @@ class TournamentController extends Controller
         $validated = $request->validate([
             'direct_qualifiers_per_group' => ['required', 'integer', 'min:0', 'max:16'],
             'repechage_enabled' => ['required', 'boolean'],
+            'repechage_participants_count' => ['nullable', 'integer', 'min:0', 'max:128'],
             'repechage_qualifiers_count' => ['nullable', 'integer', 'min:0', 'max:64'],
         ]);
+
+        $groupsCount = $tournament->groups()->count();
+        $groupSize = (int) data_get($tournament->settings ?? [], 'group_size', 0);
+
+        $directQualifiersPerGroup = (int) $validated['direct_qualifiers_per_group'];
+        $repechageEnabled = (bool) $validated['repechage_enabled'];
+        $repechageParticipantsCount = $validated['repechage_participants_count'] !== null
+            ? (int) $validated['repechage_participants_count']
+            : 0;
+
+        if ($repechageEnabled && $repechageParticipantsCount > 0) {
+            if ($groupsCount < 1) {
+                return back()->withErrors([
+                    'repechage_participants_count' => 'Prvo moraš da podesiš grupe.',
+                ]);
+            }
+
+            if ($repechageParticipantsCount % $groupsCount !== 0) {
+                return back()->withErrors([
+                    'repechage_participants_count' => 'Ukupan broj učesnika u repasažu mora biti deljiv sa brojem grupa.',
+                ]);
+            }
+
+            $repechagePerGroup = (int) ($repechageParticipantsCount / $groupsCount);
+            $availableRepechageSlotsPerGroup = max(0, $groupSize - $directQualifiersPerGroup);
+
+            if ($groupSize > 0 && $repechagePerGroup > $availableRepechageSlotsPerGroup) {
+                return back()->withErrors([
+                    'repechage_participants_count' => 'Previše učesnika za repasaž. Po grupi nema dovoljno učesnika posle direktnog prolaza.',
+                ]);
+            }
+        }
 
         $settings = $tournament->settings ?? [];
 
         $settings['direct_qualifiers_per_group'] = (int) $validated['direct_qualifiers_per_group'];
         $settings['repechage_enabled'] = (bool) $validated['repechage_enabled'];
+        $settings['repechage_participants_count'] = $validated['repechage_participants_count'] !== null
+            ? (int) $validated['repechage_participants_count']
+            : null;
         $settings['repechage_qualifiers_count'] = $validated['repechage_qualifiers_count'] !== null
             ? (int) $validated['repechage_qualifiers_count']
             : null;
