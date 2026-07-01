@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use App\Enums\RepechageOutcomeStatus;
+use App\Enums\TournamentStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
 
@@ -60,6 +61,10 @@ class TournamentRepechageController extends Controller
                 ),
                 'repechage_advanced_count' => $advancedFromRepechageCount,
                 'repechage_eliminated_count' => $eliminatedFromRepechageCount,
+                'can_complete_repechage' => $this->canCompleteRepechage(
+                    $tournament,
+                    $repechageParticipants,
+                ),
             ],
             'direct_qualifiers' => $directQualifiers,
             'repechage_participants' => $repechageParticipants,
@@ -135,6 +140,47 @@ class TournamentRepechageController extends Controller
         return back()->with('success', 'Ishod repasaža je sačuvan.');
     }
 
+    public function complete(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        $groups = collect(app(GroupStandingsCalculator::class)->calculate($tournament));
+        $repechageParticipants = $this->participantsByStatus($groups, 'repechage');
+
+        if (! $this->canCompleteRepechage($tournament, $repechageParticipants)) {
+            return back()->withErrors([
+                'repechage' => 'Repasaž ne može biti završen dok nije označen tačan broj učesnika koji prolaze dalje.',
+            ]);
+        }
+
+        $repechageParticipantIds = collect($repechageParticipants)
+            ->pluck('participant_id')
+            ->map(fn ($participantId) => (int) $participantId)
+            ->values();
+
+        TournamentParticipant::query()
+            ->where('tournament_id', $tournament->id)
+            ->whereIn('id', $repechageParticipantIds)
+            ->whereNull('repechage_outcome_status')
+            ->update([
+                'repechage_outcome_status' => RepechageOutcomeStatus::ELIMINATED->value,
+            ]);
+
+        $tournament->update([
+            'status' => TournamentStatus::KNOCKOUT_DRAW,
+        ]);
+
+        return redirect()
+            ->route('venues.tournaments.show', [$venue, $tournament])
+            ->with('success', 'Repasaž je završen. Turnir je spreman za nokaut žreb.');
+    }
+
     private function participantsByStatus($groups, string $status): array
     {
         return $groups
@@ -166,5 +212,28 @@ class TournamentRepechageController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    private function canCompleteRepechage(Tournament $tournament, array $repechageParticipants): bool
+    {
+        if ($tournament->status !== TournamentStatus::REPECHAGE) {
+            return false;
+        }
+
+        $qualifiersLimit = (int) data_get(
+            $tournament->settings ?? [],
+            'repechage_qualifiers_count',
+            0,
+        );
+
+        if ($qualifiersLimit < 1) {
+            return false;
+        }
+
+        $advancedCount = collect($repechageParticipants)
+            ->where('repechage_outcome_status', RepechageOutcomeStatus::ADVANCED->value)
+            ->count();
+
+        return $advancedCount === $qualifiersLimit;
     }
 }

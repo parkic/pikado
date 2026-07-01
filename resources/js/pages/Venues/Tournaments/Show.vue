@@ -447,8 +447,15 @@ const participantForSlot = (
             </h2>
 
             <p class="mt-1 text-sm">
-                Grupna faza je završena. Sledeći korak je generisanje repasaž mečeva.
+                Grupna faza je završena. Otvori repasaž i označi učesnike koji prolaze dalje.
             </p>
+
+            <Link
+                :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/repechage`"
+                class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            >
+                Otvori repasaž
+            </Link>
         </div>
 
         <div

@@ -23,6 +23,7 @@ type Tournament = {
     repechage_qualifiers_count: number;
     repechage_advanced_count: number;
     repechage_eliminated_count: number;
+    can_complete_repechage: boolean;
 };
 
 type ParticipantRow = {
@@ -95,6 +96,22 @@ const updateRepechageOutcome = (participant: ParticipantRow, event: Event) => {
         },
     );
 };
+
+const completeRepechage = () => {
+    const confirmed = window.confirm('Da li želiš da završiš repasaž? Svi neodlučeni učesnici iz repasaža biće označeni kao ispali.');
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.post(
+        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/repechage/complete`,
+        {},
+        {
+            preserveScroll: true,
+        },
+    );
+};
 </script>
 
 <template>
@@ -115,6 +132,15 @@ const updateRepechageOutcome = (participant: ParticipantRow, event: Event) => {
                     Pregled učesnika posle grupne faze za turnir: {{ tournament.name }}.
                 </p>
             </div>
+
+            <button
+                v-if="tournament.can_complete_repechage"
+                type="button"
+                class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                @click="completeRepechage"
+            >
+                Završi repasaž
+            </button>
 
             <div class="flex flex-col gap-2 sm:flex-row">
                 <Link
@@ -173,6 +199,49 @@ const updateRepechageOutcome = (participant: ParticipantRow, event: Event) => {
                     {{ tournament.repechage_advanced_count }} / {{ tournament.repechage_qualifiers_count || '-' }}
                 </p>
             </div>
+        </div>
+
+        <div
+            v-if="tournament.status === 'repechage'"
+            class="rounded-xl border border-primary/30 bg-primary/5 p-4"
+        >
+            <h2 class="text-lg font-medium">
+                Repasaž je u toku
+            </h2>
+
+            <p class="mt-1 text-sm text-muted-foreground">
+                Označi tačno {{ tournament.repechage_qualifiers_count }} učesnika koji prolaze dalje.
+                Trenutno označeno: {{ tournament.repechage_advanced_count }}.
+            </p>
+
+            <button
+                v-if="tournament.can_complete_repechage"
+                type="button"
+                class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                @click="completeRepechage"
+            >
+                Završi repasaž
+            </button>
+
+            <p
+                v-else
+                class="mt-3 text-sm text-muted-foreground"
+            >
+                Dugme za završetak će se pojaviti kada označiš tačan broj učesnika koji prolaze dalje.
+            </p>
+        </div>
+
+        <div
+            v-else-if="tournament.status === 'knockout_draw'"
+            class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
+        >
+            <h2 class="text-lg font-medium">
+                Repasaž je završen
+            </h2>
+
+            <p class="mt-1 text-sm">
+                Turnir je spreman za nokaut žreb.
+            </p>
         </div>
 
         <div
