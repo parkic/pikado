@@ -44,6 +44,7 @@ type Match = {
     group_name: string | null;
     scheduled_order: number | null;
     round_robin_leg: number | null;
+    wins_required: number | null;
     bracket_round: string | null;
     bracket_round_label: string | null;
     bracket_position: number | null;
@@ -150,6 +151,7 @@ const submitMatchResult = (match: Match, onSuccess?: () => void) => {
         },
         {
             preserveScroll: true,
+            preserveState: false,
             onSuccess,
         },
     );
@@ -390,13 +392,27 @@ const tieBreakerWinnerButtonClasses = (match: Match, participantId: number): str
                                 </td>
 
                                 <td class="px-4 py-3 text-muted-foreground">
-                                    {{ match.round_robin_leg ?? '-' }}
+                                    <template v-if="match.round_robin_leg">
+                                        {{ match.round_robin_leg }}
+
+                                        <span
+                                            v-if="match.wins_required && match.stage !== 'group'"
+                                            class="block text-xs"
+                                        >
+                                            na {{ match.wins_required }} dobijene
+                                        </span>
+                                    </template>
+
+                                    <template v-else>
+                                        -
+                                    </template>
                                 </td>
 
                                 <td class="px-4 py-3">
                                     <div class="flex min-w-44 items-center gap-2">
                                         <input
                                             v-model="resultForms[match.id].score_a"
+                                            :disabled="match.status === 'voided'"
                                             type="number"
                                             min="0"
                                             max="999"
@@ -417,7 +433,8 @@ const tieBreakerWinnerButtonClasses = (match: Match, participantId: number): str
 
                                         <button
                                             type="button"
-                                            class="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+                                            :disabled="match.status === 'voided'"
+                                            class="inline-flex items-center justify-center rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
                                             @click="updateMatchResult(match)"
                                         >
                                             {{ isDrawResult(match) && !resultForms[match.id].winner_participant_id ? 'Izaberi' : 'Sačuvaj' }}

@@ -42,53 +42,73 @@ class KnockoutBracketGenerator
             $createdMatches = 0;
 
             foreach ($roundDefinitions as $roundIndex => $roundDefinition) {
-                for ($position = 1; $position <= $roundDefinition['matches_count']; $position++) {
-                    $participantAId = null;
-                    $participantBId = null;
-                    $meta = [
-                        'round_label' => $roundDefinition['label'],
-                    ];
+                $legsCount = ($roundDefinition['wins_required'] * 2) - 1;
 
-                    if ($roundIndex === 0) {
-                        $pair = $firstRoundPairs[$position - 1] ?? null;
+                for ($leg = 1; $leg <= $legsCount; $leg++) {
+                    for ($position = 1; $position <= $roundDefinition['matches_count']; $position++) {
+                        $participantAId = null;
+                        $participantBId = null;
 
-                        if ($pair) {
-                            $participantAId = $pair[0]['participant_id'];
-                            $participantBId = $pair[1]['participant_id'];
+                        $meta = [
+                            'round_label' => $roundDefinition['label'],
+                            'series_wins_required' => $roundDefinition['wins_required'],
+                        ];
 
-                            $meta['participant_a_seed'] = $pair[0]['seed'];
-                            $meta['participant_b_seed'] = $pair[1]['seed'];
-                            $meta['participant_a_group'] = $pair[0]['group_name'];
-                            $meta['participant_b_group'] = $pair[1]['group_name'];
-                            $meta['participant_a_source'] = $pair[0]['source'];
-                            $meta['participant_b_source'] = $pair[1]['source'];
+                        if ($roundDefinition['source_round']) {
+                            $meta['participant_a_source_round'] = $roundDefinition['source_round'];
+                            $meta['participant_a_source_position'] = ($position * 2) - 1;
+                            $meta['participant_a_source_outcome'] = $roundDefinition['source_outcome'];
+
+                            $meta['participant_b_source_round'] = $roundDefinition['source_round'];
+                            $meta['participant_b_source_position'] = $position * 2;
+                            $meta['participant_b_source_outcome'] = $roundDefinition['source_outcome'];
                         }
-                    } else {
-                        $previousRound = $roundDefinitions[$roundIndex - 1];
 
-                        $meta['participant_a_source_round'] = $previousRound['key'];
-                        $meta['participant_a_source_position'] = ($position * 2) - 1;
-                        $meta['participant_b_source_round'] = $previousRound['key'];
-                        $meta['participant_b_source_position'] = $position * 2;
+                        if ($roundDefinition['key'] === 'third_place') {
+                            $meta['participant_a_source_round'] = $roundDefinition['source_round'];
+                            $meta['participant_a_source_position'] = 1;
+                            $meta['participant_a_source_outcome'] = 'loser';
+
+                            $meta['participant_b_source_round'] = $roundDefinition['source_round'];
+                            $meta['participant_b_source_position'] = 2;
+                            $meta['participant_b_source_outcome'] = 'loser';
+                        }
+
+                        if ($roundIndex === 0) {
+                            $pair = $firstRoundPairs[$position - 1] ?? null;
+
+                            if ($pair) {
+                                $participantAId = $pair[0]['participant_id'];
+                                $participantBId = $pair[1]['participant_id'];
+
+                                $meta['participant_a_seed'] = $pair[0]['seed'];
+                                $meta['participant_b_seed'] = $pair[1]['seed'];
+                                $meta['participant_a_group'] = $pair[0]['group_name'];
+                                $meta['participant_b_group'] = $pair[1]['group_name'];
+                                $meta['participant_a_source'] = $pair[0]['source'];
+                                $meta['participant_b_source'] = $pair[1]['source'];
+                            }
+                        }
+
+                        TournamentMatch::create([
+                            'tournament_id' => $tournament->id,
+                            'stage' => $roundDefinition['stage'],
+                            'bracket_round' => $roundDefinition['key'],
+                            'bracket_position' => $position,
+                            'participant_a_id' => $participantAId,
+                            'participant_b_id' => $participantBId,
+                            'status' => MatchStatus::SCHEDULED,
+                            'tournament_resource_id' => $this->resourceIdForMatch($resources, $resourceIndex),
+                            'scheduled_order' => $scheduledOrder,
+                            'round_robin_leg' => $leg,
+                            'wins_required' => $roundDefinition['wins_required'],
+                            'meta' => $meta,
+                        ]);
+
+                        $scheduledOrder++;
+                        $resourceIndex++;
+                        $createdMatches++;
                     }
-
-                    TournamentMatch::create([
-                        'tournament_id' => $tournament->id,
-                        'stage' => $roundDefinition['stage'],
-                        'bracket_round' => $roundDefinition['key'],
-                        'bracket_position' => $position,
-                        'participant_a_id' => $participantAId,
-                        'participant_b_id' => $participantBId,
-                        'status' => MatchStatus::SCHEDULED,
-                        'tournament_resource_id' => $this->resourceIdForMatch($resources, $resourceIndex),
-                        'scheduled_order' => $scheduledOrder,
-                        'wins_required' => 1,
-                        'meta' => $meta,
-                    ]);
-
-                    $scheduledOrder++;
-                    $resourceIndex++;
-                    $createdMatches++;
                 }
             }
 
@@ -189,23 +209,55 @@ class KnockoutBracketGenerator
 
     private function roundDefinitions(int $knockoutSize): array
     {
-        $definitions = [];
+        $standardRounds = [];
         $matchesCount = (int) ($knockoutSize / 2);
 
         while ($matchesCount >= 1) {
-            $definitions[] = [
+            $standardRounds[] = [
                 'key' => $this->roundKey($matchesCount),
                 'label' => $this->roundLabel($matchesCount),
                 'matches_count' => $matchesCount,
                 'stage' => $matchesCount === 1
                     ? MatchStage::FINAL
                     : MatchStage::KNOCKOUT,
+                'wins_required' => $matchesCount === 1 ? 3 : 2,
+                'source_round' => null,
+                'source_outcome' => 'winner',
             ];
 
             $matchesCount = (int) ($matchesCount / 2);
         }
 
-        return $definitions;
+        foreach ($standardRounds as $index => $round) {
+            if ($index === 0) {
+                continue;
+            }
+
+            $standardRounds[$index]['source_round'] = $standardRounds[$index - 1]['key'];
+        }
+
+        if (count($standardRounds) < 3) {
+            return $standardRounds;
+        }
+
+        $finalRound = array_pop($standardRounds);
+        $semiFinalRound = $standardRounds[array_key_last($standardRounds)];
+
+        $thirdPlaceRound = [
+            'key' => 'third_place',
+            'label' => 'Treće mesto',
+            'matches_count' => 1,
+            'stage' => MatchStage::THIRD_PLACE,
+            'wins_required' => 2,
+            'source_round' => $semiFinalRound['key'],
+            'source_outcome' => 'loser',
+        ];
+
+        return [
+            ...$standardRounds,
+            $thirdPlaceRound,
+            $finalRound,
+        ];
     }
 
     private function roundKey(int $matchesCount): string

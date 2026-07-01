@@ -12,6 +12,7 @@ use App\Models\TournamentResource;
 use App\Models\Venue;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -47,6 +48,7 @@ class TournamentScheduleController extends Controller
                 'group_name' => $match->group?->name,
                 'scheduled_order' => $match->scheduled_order,
                 'round_robin_leg' => $match->round_robin_leg,
+                'wins_required' => $match->wins_required,
                 'bracket_round' => $match->bracket_round,
                 'bracket_round_label' => $this->bracketRoundLabel($match->bracket_round),
                 'bracket_position' => $match->bracket_position,
@@ -198,6 +200,8 @@ class TournamentScheduleController extends Controller
             'finished_at' => now(),
         ]);
 
+        $this->resolveKnockoutSeries($match->fresh());
+
         return back()->with('success', 'Rezultat je sačuvan.');
     }
 
@@ -251,5 +255,190 @@ class TournamentScheduleController extends Controller
             'final' => 'Finale',
             default => $bracketRound,
         };
+    }
+
+    private function resolveKnockoutSeries(TournamentMatch $match): void
+    {
+        if (! in_array($match->stage, [
+            MatchStage::KNOCKOUT,
+            MatchStage::THIRD_PLACE,
+            MatchStage::FINAL,
+        ], true)) {
+            return;
+        }
+
+        if (! $match->bracket_round || ! $match->bracket_position) {
+            return;
+        }
+
+        $seriesMatches = TournamentMatch::query()
+            ->where('tournament_id', $match->tournament_id)
+            ->where('stage', $match->stage->value)
+            ->where('bracket_round', $match->bracket_round)
+            ->where('bracket_position', $match->bracket_position)
+            ->orderBy('round_robin_leg')
+            ->orderBy('id')
+            ->get();
+
+        $winsRequired = (int) ($match->wins_required ?: 1);
+
+        if ($winsRequired < 1) {
+            return;
+        }
+
+        $winsByParticipant = [];
+        $seriesWinnerId = null;
+        $seriesLoserId = null;
+
+        foreach ($seriesMatches as $seriesMatch) {
+            if ($seriesWinnerId) {
+                $this->voidSeriesMatch($seriesMatch);
+
+                continue;
+            }
+
+            if ($seriesMatch->status === MatchStatus::VOIDED) {
+                $this->restoreVoidedSeriesMatch($seriesMatch);
+                $seriesMatch->refresh();
+            }
+
+            if ($seriesMatch->status !== MatchStatus::FINISHED) {
+                continue;
+            }
+
+            if (! $seriesMatch->winner_participant_id) {
+                continue;
+            }
+
+            $winnerParticipantId = (int) $seriesMatch->winner_participant_id;
+
+            $winsByParticipant[$winnerParticipantId] =
+                ($winsByParticipant[$winnerParticipantId] ?? 0) + 1;
+
+            if ($winsByParticipant[$winnerParticipantId] >= $winsRequired) {
+                $seriesWinnerId = $winnerParticipantId;
+                $seriesLoserId = $this->seriesLoserId($seriesMatches, $seriesWinnerId);
+            }
+        }
+
+        if (! $seriesWinnerId) {
+            $this->clearNextSeriesSlot($match, 'winner');
+            $this->clearNextSeriesSlot($match, 'loser');
+
+            return;
+        }
+
+        if ($match->stage === MatchStage::FINAL) {
+            return;
+        }
+
+        if ($match->stage === MatchStage::KNOCKOUT) {
+            $this->syncNextSeriesSlot($match, 'winner', $seriesWinnerId);
+
+            if ($seriesLoserId) {
+                $this->syncNextSeriesSlot($match, 'loser', $seriesLoserId);
+            }
+        }
+    }
+
+    private function restoreVoidedSeriesMatch(TournamentMatch $match): void
+    {
+        if ($match->status !== MatchStatus::VOIDED) {
+            return;
+        }
+
+        $match->update([
+            'score_a' => null,
+            'score_b' => null,
+            'winner_participant_id' => null,
+            'loser_participant_id' => null,
+            'status' => MatchStatus::SCHEDULED,
+            'win_reason' => null,
+            'finished_at' => null,
+        ]);
+    }
+
+    private function voidSeriesMatch(TournamentMatch $match): void
+    {
+        if ($match->status === MatchStatus::VOIDED) {
+            return;
+        }
+
+        if ($match->status === MatchStatus::FINISHED) {
+            return;
+        }
+
+        $match->update([
+            'score_a' => null,
+            'score_b' => null,
+            'winner_participant_id' => null,
+            'loser_participant_id' => null,
+            'status' => MatchStatus::VOIDED,
+            'win_reason' => null,
+            'finished_at' => null,
+        ]);
+    }
+
+    private function seriesLoserId(Collection $seriesMatches, int $seriesWinnerId): ?int
+    {
+        foreach ($seriesMatches as $seriesMatch) {
+            if ($seriesMatch->participant_a_id && (int) $seriesMatch->participant_a_id !== $seriesWinnerId) {
+                return (int) $seriesMatch->participant_a_id;
+            }
+
+            if ($seriesMatch->participant_b_id && (int) $seriesMatch->participant_b_id !== $seriesWinnerId) {
+                return (int) $seriesMatch->participant_b_id;
+            }
+        }
+
+        return null;
+    }
+
+    private function clearNextSeriesSlot(TournamentMatch $sourceMatch, string $outcome): void
+    {
+        $this->syncNextSeriesSlot($sourceMatch, $outcome, null);
+    }
+
+    private function syncNextSeriesSlot(
+        TournamentMatch $sourceMatch,
+        string $outcome,
+        ?int $participantId
+    ): void {
+        foreach (['participant_a_id', 'participant_b_id'] as $slot) {
+            $sourceRoundMetaKey = $slot === 'participant_a_id'
+                ? 'participant_a_source_round'
+                : 'participant_b_source_round';
+
+            $sourcePositionMetaKey = $slot === 'participant_a_id'
+                ? 'participant_a_source_position'
+                : 'participant_b_source_position';
+
+            $sourceOutcomeMetaKey = $slot === 'participant_a_id'
+                ? 'participant_a_source_outcome'
+                : 'participant_b_source_outcome';
+
+            $nextSeriesMatches = TournamentMatch::query()
+                ->where('tournament_id', $sourceMatch->tournament_id)
+                ->where('meta->' . $sourceRoundMetaKey, $sourceMatch->bracket_round)
+                ->where('meta->' . $sourcePositionMetaKey, $sourceMatch->bracket_position)
+                ->where('meta->' . $sourceOutcomeMetaKey, $outcome)
+                ->orderBy('round_robin_leg')
+                ->orderBy('id')
+                ->get();
+
+            if ($nextSeriesMatches->isEmpty()) {
+                continue;
+            }
+
+            if ($nextSeriesMatches->contains(fn (TournamentMatch $match) => $match->status === MatchStatus::FINISHED)) {
+                continue;
+            }
+
+            foreach ($nextSeriesMatches as $nextSeriesMatch) {
+                $nextSeriesMatch->update([
+                    $slot => $participantId,
+                ]);
+            }
+        }
     }
 }
