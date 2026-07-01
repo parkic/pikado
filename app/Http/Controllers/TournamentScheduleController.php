@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Enums\MatchStage;
 use App\Enums\MatchStatus;
 use App\Enums\WinReason;
+use App\Enums\TournamentStatus;
+
 use App\Models\Tournament;
 use App\Models\TournamentMatch;
 use App\Models\TournamentParticipant;
@@ -325,10 +327,16 @@ class TournamentScheduleController extends Controller
             $this->clearNextSeriesSlot($match, 'winner');
             $this->clearNextSeriesSlot($match, 'loser');
 
+            if ($match->stage === MatchStage::FINAL) {
+                $this->syncTournamentFinishedStatus($match, null);
+            }
+
             return;
         }
 
         if ($match->stage === MatchStage::FINAL) {
+            $this->syncTournamentFinishedStatus($match, $seriesWinnerId);
+
             return;
         }
 
@@ -439,6 +447,31 @@ class TournamentScheduleController extends Controller
                     $slot => $participantId,
                 ]);
             }
+        }
+    }
+
+    private function syncTournamentFinishedStatus(TournamentMatch $match, ?int $finalWinnerParticipantId): void
+    {
+        $tournament = $match->tournament;
+
+        if (! $tournament) {
+            return;
+        }
+
+        if ($finalWinnerParticipantId) {
+            $tournament->update([
+                'status' => TournamentStatus::FINISHED,
+                'finished_at' => now(),
+            ]);
+
+            return;
+        }
+
+        if ($tournament->status === TournamentStatus::FINISHED) {
+            $tournament->update([
+                'status' => TournamentStatus::KNOCKOUT_STAGE,
+                'finished_at' => null,
+            ]);
         }
     }
 }
