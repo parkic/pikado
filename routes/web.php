@@ -163,6 +163,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/repechage', [TournamentRepechageController::class, 'index'])
         ->scopeBindings()
         ->name('venues.tournaments.repechage.index');
+    Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/repechage/participants/{participant}/outcome', [TournamentRepechageController::class, 'updateOutcome'])
+        ->scopeBindings()
+        ->name('venues.tournaments.repechage.participants.outcome');
 
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');

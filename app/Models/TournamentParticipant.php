@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ParticipantStatus;
 use App\Enums\ParticipantType;
 use App\Enums\QualificationStatus;
+use App\Enums\RepechageOutcomeStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -28,12 +29,14 @@ class TournamentParticipant extends Model
         'withdrawn_at',
         'withdrawn_stage',
         'withdrawn_reason',
+        'repechage_outcome_status',
     ];
 
     protected $casts = [
         'participant_type' => ParticipantType::class,
         'status' => ParticipantStatus::class,
         'qualification_override_status' => QualificationStatus::class,
+        'repechage_outcome_status' => RepechageOutcomeStatus::class,
         'withdrawn_at' => 'datetime',
     ];
 

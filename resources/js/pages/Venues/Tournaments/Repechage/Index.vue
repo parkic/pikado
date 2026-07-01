@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 type Venue = {
     id: number;
@@ -21,6 +21,8 @@ type Tournament = {
     status_label: string;
     settings: TournamentSettings;
     repechage_qualifiers_count: number;
+    repechage_advanced_count: number;
+    repechage_eliminated_count: number;
 };
 
 type ParticipantRow = {
@@ -36,9 +38,11 @@ type ParticipantRow = {
     points_against: number;
     points_difference: number;
     standing_points: number;
+    repechage_outcome_status: string | null;
+    repechage_outcome_label: string;
 };
 
-defineProps<{
+const props = defineProps<{
     venue: Venue;
     tournament: Tournament;
     direct_qualifiers: ParticipantRow[];
@@ -63,6 +67,33 @@ const differenceLabel = (difference: number): string => {
     }
 
     return String(difference);
+};
+
+const repechageOutcomeBadgeClasses = (status: string | null): string => {
+    if (status === 'advanced') {
+        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+    }
+
+    if (status === 'eliminated') {
+        return 'bg-muted text-muted-foreground';
+    }
+
+    return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300';
+};
+
+const updateRepechageOutcome = (participant: ParticipantRow, event: Event) => {
+    const target = event.target as HTMLSelectElement;
+
+    router.patch(
+        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/repechage/participants/${participant.participant_id}/outcome`,
+        {
+            repechage_outcome_status: target.value || null,
+        },
+        {
+            preserveScroll: true,
+            preserveState: false,
+        },
+    );
 };
 </script>
 
@@ -102,7 +133,7 @@ const differenceLabel = (difference: number): string => {
             </div>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-3">
+        <div class="grid gap-4 md:grid-cols-4">
             <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300">
                 <p class="text-sm">
                     Direktan prolaz
@@ -130,6 +161,16 @@ const differenceLabel = (difference: number): string => {
 
                 <p class="mt-2 text-2xl font-semibold">
                     {{ tournament.repechage_qualifiers_count || '-' }}
+                </p>
+            </div>
+
+            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                <p class="text-sm text-muted-foreground">
+                    Označeno prošlo
+                </p>
+
+                <p class="mt-2 text-2xl font-semibold">
+                    {{ tournament.repechage_advanced_count }} / {{ tournament.repechage_qualifiers_count || '-' }}
                 </p>
             </div>
         </div>
@@ -173,6 +214,7 @@ const differenceLabel = (difference: number): string => {
                                     <th class="px-3 py-3 text-center font-medium">P</th>
                                     <th class="px-3 py-3 text-center font-medium">+/-</th>
                                     <th class="px-3 py-3 text-center font-medium">Bod</th>
+                                    <th class="px-3 py-3 font-medium">Ishod</th>
                                 </tr>
                             </thead>
 
@@ -210,6 +252,34 @@ const differenceLabel = (difference: number): string => {
 
                                     <td class="px-3 py-3 text-center font-semibold">
                                         {{ participant.standing_points }}
+                                    </td>
+                                    <td class="px-3 py-3">
+                                        <div class="flex min-w-48 flex-col gap-2">
+                                            <span
+                                                class="inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium"
+                                                :class="repechageOutcomeBadgeClasses(participant.repechage_outcome_status)"
+                                            >
+                                                {{ participant.repechage_outcome_label }}
+                                            </span>
+
+                                            <select
+                                                :value="participant.repechage_outcome_status ?? ''"
+                                                class="rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-xs outline-none transition focus:border-primary dark:border-sidebar-border"
+                                                @change="updateRepechageOutcome(participant, $event)"
+                                            >
+                                                <option value="">
+                                                    Neodlučeno
+                                                </option>
+
+                                                <option value="advanced">
+                                                    Prošao iz repasaža
+                                                </option>
+
+                                                <option value="eliminated">
+                                                    Ispao posle repasaža
+                                                </option>
+                                            </select>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>

@@ -55,6 +55,8 @@ class GroupStandingsCalculator
                 'points_difference' => 0,
                 'standing_points' => 0,
                 'qualification_override_status' => $participant->qualification_override_status?->value,
+                'repechage_outcome_status' => $participant->repechage_outcome_status?->value,
+                'repechage_outcome_label' => $this->repechageOutcomeLabel($participant->repechage_outcome_status?->value),
             ];
         }
 
@@ -243,6 +245,15 @@ class GroupStandingsCalculator
             'repechage' => 'Repasaž',
             'eliminated' => 'Ispao',
             default => '-',
+        };
+    }
+
+    private function repechageOutcomeLabel(?string $status): string
+    {
+        return match ($status) {
+            'advanced' => 'Prošao iz repasaža',
+            'eliminated' => 'Ispao posle repasaža',
+            default => 'Neodlučeno',
         };
     }
 }
