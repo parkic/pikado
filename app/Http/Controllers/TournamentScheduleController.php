@@ -47,6 +47,9 @@ class TournamentScheduleController extends Controller
                 'group_name' => $match->group?->name,
                 'scheduled_order' => $match->scheduled_order,
                 'round_robin_leg' => $match->round_robin_leg,
+                'bracket_round' => $match->bracket_round,
+                'bracket_round_label' => $this->bracketRoundLabel($match->bracket_round),
+                'bracket_position' => $match->bracket_position,
                 'participant_a' => $match->participantA ? [
                     'id' => $match->participantA->id,
                     'group_position' => $match->participantA->group_position,
@@ -235,6 +238,18 @@ class TournamentScheduleController extends Controller
             MatchStatus::FINISHED => 'Finished',
             MatchStatus::VOIDED => 'Voided',
             MatchStatus::CANCELLED => 'Cancelled',
+        };
+    }
+
+    private function bracketRoundLabel(?string $bracketRound): ?string
+    {
+        return match ($bracketRound) {
+            'round_of_32' => '1/16 finala',
+            'round_of_16' => '1/8 finala',
+            'quarter_final' => 'Četvrtfinale',
+            'semi_final' => 'Polufinale',
+            'final' => 'Finale',
+            default => $bracketRound,
         };
     }
 }

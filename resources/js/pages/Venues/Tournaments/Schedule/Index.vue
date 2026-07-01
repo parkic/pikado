@@ -44,6 +44,9 @@ type Match = {
     group_name: string | null;
     scheduled_order: number | null;
     round_robin_leg: number | null;
+    bracket_round: string | null;
+    bracket_round_label: string | null;
+    bracket_position: number | null;
     participant_a: Participant | null;
     participant_b: Participant | null;
     score_a: number | null;
@@ -325,7 +328,23 @@ const tieBreakerWinnerButtonClasses = (match: Match, participantId: number): str
                                 </td>
 
                                 <td class="px-4 py-3">
-                                    {{ match.group_name ? `Grupa ${match.group_name}` : '-' }}
+                                    <template v-if="match.group_name">
+                                        Grupa {{ match.group_name }}
+                                    </template>
+
+                                    <template v-else-if="match.bracket_round_label">
+                                        {{ match.bracket_round_label }}
+                                        <span
+                                            v-if="match.bracket_position"
+                                            class="text-muted-foreground"
+                                        >
+                                            #{{ match.bracket_position }}
+                                        </span>
+                                    </template>
+
+                                    <template v-else>
+                                        -
+                                    </template>
                                 </td>
 
                                 <td class="px-4 py-3">

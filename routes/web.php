@@ -161,6 +161,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->scopeBindings()
         ->name('venues.tournaments.qualification.store');
 
+    // Repechage
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/repechage', [TournamentRepechageController::class, 'index'])
         ->scopeBindings()
         ->name('venues.tournaments.repechage.index');
@@ -171,9 +172,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->scopeBindings()
         ->name('venues.tournaments.repechage.complete');
 
+    // Knockout Bracket
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/knockout', [TournamentKnockoutController::class, 'index'])
         ->scopeBindings()
         ->name('venues.tournaments.knockout.index');
+    Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/knockout/generate', [TournamentKnockoutController::class, 'generate'])
+        ->scopeBindings()
+        ->name('venues.tournaments.knockout.generate');
 
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');

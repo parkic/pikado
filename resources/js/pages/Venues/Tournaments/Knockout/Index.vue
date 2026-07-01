@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 
 type Venue = {
     id: number;
@@ -18,6 +18,8 @@ type Tournament = {
     direct_qualifiers_count: number;
     repechage_qualifiers_count: number;
     is_knockout_ready: boolean;
+    knockout_matches_count: number;
+    can_generate_knockout_bracket: boolean;
 };
 
 type KnockoutParticipant = {
@@ -38,7 +40,7 @@ type KnockoutParticipant = {
     source_label: string;
 };
 
-defineProps<{
+const props = defineProps<{
     venue: Venue;
     tournament: Tournament;
     direct_qualifiers: KnockoutParticipant[];
@@ -72,6 +74,16 @@ const differenceLabel = (difference: number): string => {
 
     return String(difference);
 };
+
+const generateKnockoutBracket = () => {
+    const confirmed = window.confirm('Da li želiš da generišeš nokaut kostur?');
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/knockout/generate`);
+};
 </script>
 
 <template>
@@ -94,6 +106,15 @@ const differenceLabel = (difference: number): string => {
             </div>
 
             <div class="flex flex-col gap-2 sm:flex-row">
+                <button
+                    v-if="tournament.can_generate_knockout_bracket"
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                    @click="generateKnockoutBracket"
+                >
+                    Generiši kostur
+                </button>
+
                 <Link
                     :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/repechage`"
                     class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
@@ -117,7 +138,7 @@ const differenceLabel = (difference: number): string => {
             </div>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-4">
+        <div class="grid gap-4 md:grid-cols-5">
             <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
                 <p class="text-sm text-muted-foreground">
                     Veličina nokauta
@@ -170,6 +191,23 @@ const differenceLabel = (difference: number): string => {
             <p class="mt-1 text-sm">
                 Broj učesnika se poklapa sa veličinom nokauta. Sledeći korak je generisanje nokaut kostura.
             </p>
+
+            <button
+                v-if="tournament.can_generate_knockout_bracket"
+                type="button"
+                class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                @click="generateKnockoutBracket"
+            >
+                Generiši kostur
+            </button>
+
+            <Link
+                v-else-if="tournament.knockout_matches_count > 0"
+                :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/schedule`"
+                class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            >
+                Otvori raspored
+            </Link>
         </div>
 
         <div
@@ -194,6 +232,16 @@ const differenceLabel = (difference: number): string => {
 
                 <p class="mt-1 text-sm text-muted-foreground">
                     Lista učesnika koji ulaze u nokaut. Kostur još nije generisan.
+                </p>
+            </div>
+
+            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                <p class="text-sm text-muted-foreground">
+                    Nokaut mečevi
+                </p>
+
+                <p class="mt-2 text-2xl font-semibold">
+                    {{ tournament.knockout_matches_count }}
                 </p>
             </div>
 
