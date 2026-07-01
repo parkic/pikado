@@ -12,6 +12,7 @@ use App\Http\Controllers\TournamentGroupDrawController;
 use App\Http\Controllers\TournamentScheduleController;
 use App\Http\Controllers\TournamentStandingsController;
 use App\Http\Controllers\TournamentRepechageController;
+use App\Http\Controllers\TournamentKnockoutController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -169,6 +170,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/repechage/complete', [TournamentRepechageController::class, 'complete'])
         ->scopeBindings()
         ->name('venues.tournaments.repechage.complete');
+
+    Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/knockout', [TournamentKnockoutController::class, 'index'])
+        ->scopeBindings()
+        ->name('venues.tournaments.knockout.index');
 
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');

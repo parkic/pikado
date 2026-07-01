@@ -262,6 +262,13 @@ const participantForSlot = (
                 </Link>
 
                 <Link
+                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/knockout`"
+                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+                >
+                    Nokaut
+                </Link>
+
+                <Link
                     :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/standings`"
                     class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
                 >
@@ -469,6 +476,13 @@ const participantForSlot = (
             <p class="mt-1 text-sm">
                 Grupna faza je završena. Sledeći korak je generisanje nokaut kostura.
             </p>
+
+            <Link
+                :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/knockout`"
+                class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            >
+                Otvori nokaut
+            </Link>
         </div>
 
         <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
