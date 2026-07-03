@@ -189,6 +189,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->scopeBindings()
         ->name('venues.tournaments.knockout.generate');
 
+    Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/knockout/matches/{match}/participants/{participant}/walkover', [TournamentScheduleController::class, 'applyKnockoutWalkover'])
+        ->withoutScopedBindings()
+        ->name('venues.tournaments.knockout.matches.participants.walkover');
+
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
         ->name('venues.tournaments.show');
 

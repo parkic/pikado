@@ -44,6 +44,8 @@ type SeriesParticipant = {
     id: number;
     display_name: string;
     group_position: string | null;
+    status: string;
+    is_withdrawn: boolean;
 } | null;
 
 type KnockoutLeg = {
@@ -158,6 +160,44 @@ const generateKnockoutBracket = () => {
     }
 
     router.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/knockout/generate`);
+};
+
+const canApplyWalkover = (series: KnockoutSeries): boolean => {
+    return props.tournament.status === 'knockout_stage'
+        && !series.winner
+        && !!series.participant_a
+        && !!series.participant_b
+        && series.legs.length > 0;
+};
+
+const applyKnockoutWalkover = (
+    series: KnockoutSeries,
+    participant: NonNullable<SeriesParticipant>,
+) => {
+    const firstLeg = series.legs[0];
+
+    if (!firstLeg) {
+        window.alert('Serija nema partije.');
+
+        return;
+    }
+
+    const confirmed = window.confirm(
+        `Da li želiš da označiš da je "${participant.display_name}" odustao? Protivnik automatski dobija seriju.`,
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.patch(
+        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/knockout/matches/${firstLeg.id}/participants/${participant.id}/walkover`,
+        {},
+        {
+            preserveScroll: true,
+            preserveState: false,
+        },
+    );
 };
 </script>
 
@@ -364,9 +404,19 @@ const generateKnockoutBracket = () => {
 
                             <div class="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-lg bg-muted/40 p-3">
                                 <div>
-                                    <p class="font-medium">
+                                    <p
+                                        class="font-medium"
+                                        :class="series.participant_a?.is_withdrawn ? 'text-muted-foreground line-through' : ''"
+                                    >
                                         {{ series.participant_a?.display_name ?? 'Čeka učesnika' }}
                                     </p>
+
+                                    <span
+                                        v-if="series.participant_a?.is_withdrawn"
+                                        class="mt-1 inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
+                                    >
+                                        Odustao
+                                    </span>
 
                                     <p
                                         v-if="series.participant_a?.group_position"
@@ -381,9 +431,19 @@ const generateKnockoutBracket = () => {
                                 </div>
 
                                 <div class="text-right">
-                                    <p class="font-medium">
+                                    <p
+                                        class="font-medium"
+                                        :class="series.participant_b?.is_withdrawn ? 'text-muted-foreground line-through' : ''"
+                                    >
                                         {{ series.participant_b?.display_name ?? 'Čeka učesnika' }}
                                     </p>
+
+                                    <span
+                                        v-if="series.participant_b?.is_withdrawn"
+                                        class="mt-1 inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
+                                    >
+                                        Odustao
+                                    </span>
 
                                     <p
                                         v-if="series.participant_b?.group_position"
@@ -395,13 +455,32 @@ const generateKnockoutBracket = () => {
                             </div>
 
                             <div
-                                v-if="series.winner"
-                                class="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300"
+                                v-if="canApplyWalkover(series)"
+                                class="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3"
                             >
-                                Pobednik serije:
-                                <span class="font-semibold">
-                                    {{ series.winner.display_name }}
-                                </span>
+                                <p class="text-xs font-medium text-red-700 dark:text-red-300">
+                                    Walkover / odustajanje
+                                </p>
+
+                                <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+                                    <button
+                                        v-if="series.participant_a"
+                                        type="button"
+                                        class="inline-flex items-center justify-center rounded-lg border border-red-500/30 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
+                                        @click="applyKnockoutWalkover(series, series.participant_a)"
+                                    >
+                                        {{ series.participant_a.display_name }} odustao
+                                    </button>
+
+                                    <button
+                                        v-if="series.participant_b"
+                                        type="button"
+                                        class="inline-flex items-center justify-center rounded-lg border border-red-500/30 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
+                                        @click="applyKnockoutWalkover(series, series.participant_b)"
+                                    >
+                                        {{ series.participant_b.display_name }} odustao
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="mt-4 overflow-hidden rounded-lg border border-sidebar-border/70 dark:border-sidebar-border">

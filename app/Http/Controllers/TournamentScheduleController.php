@@ -6,6 +6,7 @@ use App\Enums\MatchStage;
 use App\Enums\MatchStatus;
 use App\Enums\WinReason;
 use App\Enums\TournamentStatus;
+use App\Enums\ParticipantStatus;
 
 use App\Models\Tournament;
 use App\Models\TournamentMatch;
@@ -15,6 +16,7 @@ use App\Models\Venue;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -211,6 +213,186 @@ class TournamentScheduleController extends Controller
         return back()->with('success', 'Rezultat je sačuvan.');
     }
 
+    public function applyKnockoutWalkover(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        TournamentMatch $match,
+        TournamentParticipant $participant
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+        abort_unless($match->tournament_id === $tournament->id, 404);
+        abort_unless($participant->tournament_id === $tournament->id, 404);
+
+        if ($tournament->status !== TournamentStatus::KNOCKOUT_STAGE) {
+            return back()->withErrors([
+                'walkover' => 'Walkover može da se primeni samo dok je nokaut faza u toku.',
+            ]);
+        }
+
+        if (! in_array($match->stage, [
+            MatchStage::KNOCKOUT,
+            MatchStage::THIRD_PLACE,
+            MatchStage::FINAL,
+        ], true)) {
+            return back()->withErrors([
+                'walkover' => 'Walkover može da se primeni samo na nokaut, treće mesto ili finale.',
+            ]);
+        }
+
+        if (! $match->bracket_round || ! $match->bracket_position) {
+            return back()->withErrors([
+                'walkover' => 'Ovaj meč ne pripada validnoj nokaut seriji.',
+            ]);
+        }
+
+        $seriesMatches = $this->knockoutSeriesMatches($match);
+
+        if ($seriesMatches->isEmpty()) {
+            return back()->withErrors([
+                'walkover' => 'Nokaut serija nije pronađena.',
+            ]);
+        }
+
+        /** @var TournamentMatch $firstMatch */
+        $firstMatch = $seriesMatches->first();
+
+        if (! $firstMatch->participant_a_id || ! $firstMatch->participant_b_id) {
+            return back()->withErrors([
+                'walkover' => 'Serija nema oba učesnika.',
+            ]);
+        }
+
+        if (! in_array($participant->id, [
+            (int) $firstMatch->participant_a_id,
+            (int) $firstMatch->participant_b_id,
+        ], true)) {
+            return back()->withErrors([
+                'walkover' => 'Izabrani učesnik ne pripada ovoj nokaut seriji.',
+            ]);
+        }
+
+        if ($this->dependentSeriesHasFinishedMatch($firstMatch)) {
+            return back()->withErrors([
+                'walkover' => 'Ne možeš promeniti ovu seriju jer je sledeća povezana serija već završena.',
+            ]);
+        }
+
+        $winnerParticipantId = (int) $participant->id === (int) $firstMatch->participant_a_id
+            ? (int) $firstMatch->participant_b_id
+            : (int) $firstMatch->participant_a_id;
+
+        $winnerParticipant = TournamentParticipant::query()
+            ->where('tournament_id', $tournament->id)
+            ->find($winnerParticipantId);
+
+        if (! $winnerParticipant) {
+            return back()->withErrors([
+                'walkover' => 'Protivnik nije pronađen.',
+            ]);
+        }
+
+        if ($winnerParticipant->status === ParticipantStatus::WITHDRAWN) {
+            return back()->withErrors([
+                'walkover' => 'Protivnik je već označen kao odustao.',
+            ]);
+        }
+
+        $winsRequired = (int) ($firstMatch->wins_required ?: 1);
+
+        $existingWinnerWins = $seriesMatches
+            ->filter(fn (TournamentMatch $seriesMatch) => $seriesMatch->status === MatchStatus::FINISHED)
+            ->filter(fn (TournamentMatch $seriesMatch) => (int) $seriesMatch->winner_participant_id === $winnerParticipantId)
+            ->count();
+
+        $walkoverWinsNeeded = max(0, $winsRequired - $existingWinnerWins);
+
+        $availableUnfinishedMatchesCount = $seriesMatches
+            ->reject(fn (TournamentMatch $seriesMatch) => $seriesMatch->status === MatchStatus::FINISHED)
+            ->count();
+
+        if ($walkoverWinsNeeded > $availableUnfinishedMatchesCount) {
+            return back()->withErrors([
+                'walkover' => 'Nema dovoljno neodigranih partija da se serija završi walkoverom.',
+            ]);
+        }
+
+        $walkoverWinsNeeded = max(0, $winsRequired - $existingWinnerWins);
+
+        DB::transaction(function () use (
+            $tournament,
+            $seriesMatches,
+            $participant,
+            $winnerParticipantId,
+            $walkoverWinsNeeded
+        ): void {
+            $participant->update([
+                'status' => ParticipantStatus::WITHDRAWN,
+                'withdrawn_at' => $participant->withdrawn_at ?? now(),
+                'withdrawn_stage' => $tournament->status->value,
+                'withdrawn_reason' => 'Odustao tokom nokaut faze.',
+            ]);
+
+            $walkoverWinsApplied = 0;
+
+            foreach ($seriesMatches->values() as $seriesMatch) {
+                /** @var TournamentMatch $seriesMatch */
+                $meta = $seriesMatch->meta ?? [];
+
+                if ($seriesMatch->status === MatchStatus::FINISHED) {
+                    continue;
+                }
+
+                if ($walkoverWinsApplied < $walkoverWinsNeeded) {
+                    $scoreA = (int) $seriesMatch->participant_a_id === $winnerParticipantId ? 1 : 0;
+                    $scoreB = (int) $seriesMatch->participant_b_id === $winnerParticipantId ? 1 : 0;
+
+                    $meta['walkover'] = true;
+                    $meta['walkover_reason'] = 'opponent_withdrew';
+                    $meta['withdrawn_participant_id'] = $participant->id;
+                    $meta['walkover_at'] = now()->toDateTimeString();
+
+                    $seriesMatch->update([
+                        'score_a' => $scoreA,
+                        'score_b' => $scoreB,
+                        'winner_participant_id' => $winnerParticipantId,
+                        'loser_participant_id' => $participant->id,
+                        'status' => MatchStatus::FINISHED,
+                        'win_reason' => WinReason::OPPONENT_WITHDREW,
+                        'finished_at' => now(),
+                        'meta' => $meta,
+                    ]);
+
+                    $walkoverWinsApplied++;
+
+                    continue;
+                }
+
+                $meta['voided_reason'] = 'series_decided_by_walkover';
+                $meta['withdrawn_participant_id'] = $participant->id;
+                $meta['voided_at'] = now()->toDateTimeString();
+
+                $seriesMatch->update([
+                    'score_a' => null,
+                    'score_b' => null,
+                    'winner_participant_id' => null,
+                    'loser_participant_id' => null,
+                    'status' => MatchStatus::VOIDED,
+                    'win_reason' => null,
+                    'finished_at' => null,
+                    'meta' => $meta,
+                ]);
+            }
+        });
+
+        $this->resolveKnockoutSeries($firstMatch->fresh());
+
+        return back()->with('success', 'Walkover je primenjen i protivnik je prošao dalje.');
+    }
+
     private function participantDisplayName(TournamentParticipant $participant): string
     {
         if ($participant->player) {
@@ -262,6 +444,43 @@ class TournamentScheduleController extends Controller
             'final' => 'Finale',
             default => $bracketRound,
         };
+    }
+
+    private function knockoutSeriesMatches(TournamentMatch $match): Collection
+    {
+        return TournamentMatch::query()
+            ->where('tournament_id', $match->tournament_id)
+            ->where('stage', $match->stage->value)
+            ->where('bracket_round', $match->bracket_round)
+            ->where('bracket_position', $match->bracket_position)
+            ->orderBy('round_robin_leg')
+            ->orderBy('id')
+            ->get();
+    }
+
+    private function dependentSeriesHasFinishedMatch(TournamentMatch $sourceMatch): bool
+    {
+        if ($sourceMatch->stage !== MatchStage::KNOCKOUT) {
+            return false;
+        }
+
+        return TournamentMatch::query()
+            ->where('tournament_id', $sourceMatch->tournament_id)
+            ->where('status', MatchStatus::FINISHED->value)
+            ->where(function ($query) use ($sourceMatch) {
+                $query
+                    ->where(function ($slotQuery) use ($sourceMatch) {
+                        $slotQuery
+                            ->where('meta->participant_a_source_round', $sourceMatch->bracket_round)
+                            ->where('meta->participant_a_source_position', $sourceMatch->bracket_position);
+                    })
+                    ->orWhere(function ($slotQuery) use ($sourceMatch) {
+                        $slotQuery
+                            ->where('meta->participant_b_source_round', $sourceMatch->bracket_round)
+                            ->where('meta->participant_b_source_position', $sourceMatch->bracket_position);
+                    });
+            })
+            ->exists();
     }
 
     private function resolveKnockoutSeries(TournamentMatch $match): void

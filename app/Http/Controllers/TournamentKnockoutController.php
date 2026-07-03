@@ -385,6 +385,8 @@ class TournamentKnockoutController extends Controller
             'id' => $participant->id,
             'display_name' => $this->participantDisplayName($participant),
             'group_position' => $participant->group_position,
+            'status' => $participant->status->value,
+            'is_withdrawn' => $participant->status->value === 'withdrawn',
         ];
     }
 
