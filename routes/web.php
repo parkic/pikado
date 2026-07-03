@@ -13,8 +13,12 @@ use App\Http\Controllers\TournamentScheduleController;
 use App\Http\Controllers\TournamentStandingsController;
 use App\Http\Controllers\TournamentRepechageController;
 use App\Http\Controllers\TournamentKnockoutController;
+use App\Http\Controllers\PublicTournamentController;
 
 Route::inertia('/', 'Welcome')->name('home');
+
+Route::get('/t/{publicCode}/live', [PublicTournamentController::class, 'live'])
+    ->name('public.tournaments.live');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
