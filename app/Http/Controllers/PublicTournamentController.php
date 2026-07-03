@@ -102,6 +102,7 @@ class PublicTournamentController extends Controller
             'active_matches' => $activeMatches,
             'next_matches' => $nextMatches,
             'recent_matches' => $recentMatches,
+            'podium' => $this->publicTournamentPodium($tournament),
         ]);
     }
 
@@ -321,6 +322,126 @@ class PublicTournamentController extends Controller
             'resource_name' => $match->resource?->name,
             'finished_at' => $match->finished_at?->format('d.m.Y. H:i'),
         ];
+    }
+
+    private function publicTournamentPodium(Tournament $tournament): array
+    {
+        $final = $this->publicKnockoutSeriesResult($tournament, MatchStage::FINAL);
+        $thirdPlace = $this->publicKnockoutSeriesResult($tournament, MatchStage::THIRD_PLACE);
+
+        $champion = $final['winner'];
+        $secondPlace = $final['loser'];
+
+        $third = $thirdPlace['winner'];
+        $fourth = $thirdPlace['loser'];
+
+        return [
+            'champion' => $this->participantSummary($champion),
+            'second_place' => $this->participantSummary($secondPlace),
+            'third_place' => $this->participantSummary($third),
+            'fourth_place' => $this->participantSummary($fourth),
+            'final_score' => $final['score'],
+            'third_place_score' => $thirdPlace['score'],
+            'is_complete' => $champion !== null
+                && $secondPlace !== null
+                && $third !== null
+                && $fourth !== null,
+        ];
+    }
+
+    private function publicKnockoutSeriesResult(Tournament $tournament, MatchStage $stage): array
+    {
+        $seriesMatches = TournamentMatch::query()
+            ->with([
+                'participantA.player',
+                'participantA.team',
+                'participantB.player',
+                'participantB.team',
+                'winner.player',
+                'winner.team',
+            ])
+            ->where('tournament_id', $tournament->id)
+            ->where('stage', $stage->value)
+            ->orderBy('round_robin_leg')
+            ->orderBy('id')
+            ->get();
+
+        if ($seriesMatches->isEmpty()) {
+            return [
+                'winner' => null,
+                'loser' => null,
+                'score' => null,
+            ];
+        }
+
+        /** @var TournamentMatch $firstMatch */
+        $firstMatch = $seriesMatches->first();
+
+        $winsRequired = (int) ($firstMatch->wins_required ?: 1);
+
+        $winnerWins = $seriesMatches
+            ->filter(fn (TournamentMatch $match) => $match->status === MatchStatus::FINISHED)
+            ->groupBy('winner_participant_id')
+            ->map(fn (Collection $matches) => $matches->count())
+            ->sortDesc();
+
+        $winnerParticipantId = null;
+
+        foreach ($winnerWins as $participantId => $winsCount) {
+            if ($participantId && $winsCount >= $winsRequired) {
+                $winnerParticipantId = (int) $participantId;
+                break;
+            }
+        }
+
+        if (! $winnerParticipantId) {
+            return [
+                'winner' => null,
+                'loser' => null,
+                'score' => null,
+            ];
+        }
+
+        $loserParticipantId = $this->publicSeriesOpponentId($seriesMatches, $winnerParticipantId);
+
+        $winner = $this->participantFromSeries($seriesMatches, $winnerParticipantId);
+        $loser = $this->participantFromSeries($seriesMatches, $loserParticipantId);
+
+        $participantAWins = $seriesMatches
+            ->filter(fn (TournamentMatch $match) => $match->status === MatchStatus::FINISHED)
+            ->filter(fn (TournamentMatch $match) => (int) $match->winner_participant_id === (int) $firstMatch->participant_a_id)
+            ->count();
+
+        $participantBWins = $seriesMatches
+            ->filter(fn (TournamentMatch $match) => $match->status === MatchStatus::FINISHED)
+            ->filter(fn (TournamentMatch $match) => (int) $match->winner_participant_id === (int) $firstMatch->participant_b_id)
+            ->count();
+
+        return [
+            'winner' => $winner,
+            'loser' => $loser,
+            'score' => $participantAWins . ' : ' . $participantBWins,
+        ];
+    }
+
+    private function publicSeriesOpponentId(Collection $seriesMatches, int $winnerParticipantId): ?int
+    {
+        /** @var TournamentMatch|null $match */
+        $match = $seriesMatches
+            ->first(function (TournamentMatch $seriesMatch) use ($winnerParticipantId) {
+                return (int) $seriesMatch->participant_a_id === $winnerParticipantId
+                    || (int) $seriesMatch->participant_b_id === $winnerParticipantId;
+            });
+
+        if (! $match) {
+            return null;
+        }
+
+        if ((int) $match->participant_a_id === $winnerParticipantId) {
+            return $match->participant_b_id ? (int) $match->participant_b_id : null;
+        }
+
+        return $match->participant_a_id ? (int) $match->participant_a_id : null;
     }
 
     private function participantSummary(?TournamentParticipant $participant): ?array

@@ -50,12 +50,30 @@ type PublicMatch = {
     resource_name: string | null;
 };
 
+type PodiumParticipant = {
+    id: number;
+    display_name: string;
+    group_position: string | null;
+    is_withdrawn: boolean;
+} | null;
+
+type TournamentPodium = {
+    champion: PodiumParticipant;
+    second_place: PodiumParticipant;
+    third_place: PodiumParticipant;
+    fourth_place: PodiumParticipant;
+    final_score: string | null;
+    third_place_score: string | null;
+    is_complete: boolean;
+};
+
 defineProps<{
     venue: Venue;
     tournament: Tournament;
     active_matches: PublicMatch[];
     next_matches: PublicMatch[];
     recent_matches: PublicMatch[];
+    podium: TournamentPodium;
 }>();
 
 const matchContextLabel = (match: PublicMatch): string => {
@@ -84,6 +102,22 @@ const statusClasses = (status: string): string => {
     }
 
     return 'bg-yellow-500/15 text-yellow-200';
+};
+
+const podiumCardClasses = (place: number): string => {
+    if (place === 1) {
+        return 'border-amber-400/40 bg-amber-400/10 text-amber-100';
+    }
+
+    if (place === 2) {
+        return 'border-zinc-300/30 bg-zinc-300/10 text-zinc-100';
+    }
+
+    if (place === 3) {
+        return 'border-orange-400/30 bg-orange-400/10 text-orange-100';
+    }
+
+    return 'border-white/10 bg-white/[0.03] text-zinc-100';
 };
 </script>
 
@@ -177,6 +211,103 @@ const statusClasses = (status: string): string => {
                     </nav>
                 </div>
             </header>
+
+            <section
+                v-if="podium.is_complete"
+                class="rounded-3xl border border-amber-400/30 bg-amber-400/5 p-5 md:p-6"
+            >
+                <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <p class="text-sm uppercase tracking-[0.25em] text-amber-200/80">
+                            Finalni plasman
+                        </p>
+
+                        <h2 class="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
+                            Turnir je završen
+                        </h2>
+                    </div>
+
+                    <div class="text-sm text-zinc-400">
+                        <p v-if="podium.final_score">
+                            Finale: <span class="font-semibold text-zinc-100">{{ podium.final_score }}</span>
+                        </p>
+
+                        <p v-if="podium.third_place_score">
+                            Treće mesto: <span class="font-semibold text-zinc-100">{{ podium.third_place_score }}</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-6 grid gap-4 md:grid-cols-4">
+                    <article
+                        class="rounded-2xl border p-4"
+                        :class="podiumCardClasses(1)"
+                    >
+                        <p class="text-sm opacity-80">
+                            🏆 1. mesto
+                        </p>
+
+                        <h3 class="mt-3 text-xl font-bold">
+                            {{ podium.champion?.display_name }}
+                        </h3>
+
+                        <p class="mt-1 text-sm opacity-70">
+                            {{ podium.champion?.group_position ?? '-' }}
+                        </p>
+                    </article>
+
+                    <article
+                        class="rounded-2xl border p-4"
+                        :class="podiumCardClasses(2)"
+                    >
+                        <p class="text-sm opacity-80">
+                            🥈 2. mesto
+                        </p>
+
+                        <h3 class="mt-3 text-xl font-bold">
+                            {{ podium.second_place?.display_name }}
+                        </h3>
+
+                        <p class="mt-1 text-sm opacity-70">
+                            {{ podium.second_place?.group_position ?? '-' }}
+                        </p>
+                    </article>
+
+                    <article
+                        class="rounded-2xl border p-4"
+                        :class="podiumCardClasses(3)"
+                    >
+                        <p class="text-sm opacity-80">
+                            🥉 3. mesto
+                        </p>
+
+                        <h3 class="mt-3 text-xl font-bold">
+                            {{ podium.third_place?.display_name }}
+                        </h3>
+
+                        <p class="mt-1 text-sm opacity-70">
+                            {{ podium.third_place?.group_position ?? '-' }}
+                        </p>
+                    </article>
+
+                    <article
+                        class="rounded-2xl border p-4"
+                        :class="podiumCardClasses(4)"
+                    >
+                        <p class="text-sm opacity-80">
+                            4. mesto
+                        </p>
+
+                        <h3 class="mt-3 text-xl font-bold">
+                            {{ podium.fourth_place?.display_name }}
+                        </h3>
+
+                        <p class="mt-1 text-sm opacity-70">
+                            {{ podium.fourth_place?.group_position ?? '-' }}
+                        </p>
+                    </article>
+                </div>
+            </section>
 
             <section
                 v-if="active_matches.length"
