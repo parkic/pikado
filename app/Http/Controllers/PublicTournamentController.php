@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Enums\MatchStatus;
+use App\Enums\MatchStage;
 use App\Models\Tournament;
 use App\Models\TournamentMatch;
 use App\Models\TournamentParticipant;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Services\GroupStandingsCalculator;
 
 class PublicTournamentController extends Controller
 {
@@ -98,6 +100,69 @@ class PublicTournamentController extends Controller
             'active_matches' => $activeMatches,
             'next_matches' => $nextMatches,
             'recent_matches' => $recentMatches,
+        ]);
+    }
+
+    public function groups(string $publicCode, GroupStandingsCalculator $calculator): Response
+    {
+        $tournament = Tournament::query()
+            ->with([
+                'venue',
+            ])
+            ->where('public_code', $publicCode)
+            ->where('public_enabled', true)
+            ->firstOrFail();
+
+        $groups = collect($calculator->calculate($tournament));
+
+        $groupMatches = $tournament->matches()
+            ->with([
+                'group',
+                'participantA.player',
+                'participantA.team',
+                'participantB.player',
+                'participantB.team',
+                'winner.player',
+                'winner.team',
+                'resource',
+            ])
+            ->where('stage', MatchStage::GROUP->value)
+            ->orderBy('scheduled_order')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('tournament_group_id');
+
+        $groups = $groups
+            ->map(function (array $group) use ($groupMatches) {
+                return [
+                    'id' => $group['id'],
+                    'name' => $group['name'],
+                    'matches_count' => $group['matches_count'],
+                    'finished_matches_count' => $group['finished_matches_count'],
+                    'rows' => $group['rows'],
+                    'matches' => collect($groupMatches->get($group['id'], collect()))
+                        ->map(fn (TournamentMatch $match) => $this->matchSummary($match))
+                        ->values(),
+                ];
+            })
+            ->values();
+
+        return Inertia::render('Public/Tournaments/Groups', [
+            'venue' => [
+                'name' => $tournament->venue->name,
+                'slug' => $tournament->venue->slug,
+                'logo_path' => $tournament->venue->logo_path,
+            ],
+            'tournament' => [
+                'id' => $tournament->id,
+                'name' => $tournament->name,
+                'public_code' => $tournament->public_code,
+                'game_type' => $tournament->game_type->value,
+                'match_mode' => $tournament->match_mode->value,
+                'status' => $tournament->status->value,
+                'status_label' => $this->tournamentStatusLabel($tournament->status->value),
+            ],
+            'groups' => $groups,
         ]);
     }
 

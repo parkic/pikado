@@ -19,6 +19,8 @@ Route::inertia('/', 'Welcome')->name('home');
 
 Route::get('/t/{publicCode}/live', [PublicTournamentController::class, 'live'])
     ->name('public.tournaments.live');
+Route::get('/t/{publicCode}/groups', [PublicTournamentController::class, 'groups'])
+    ->name('public.tournaments.groups');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 
 type Venue = {
     name: string;
@@ -91,7 +91,7 @@ const statusClasses = (status: string): string => {
     <Head :title="`${tournament.name} - Live`" />
 
     <div class="min-h-screen bg-zinc-950 text-zinc-50">
-        <main class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 md:px-8">
+        <main class="mx-auto flex w-full max-w-full flex-col gap-6 px-4 py-6 md:px-8">
             <header class="rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-8">
                 <div class="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
                     <div>
@@ -145,6 +145,22 @@ const statusClasses = (status: string): string => {
                             Završeno: {{ tournament.finished_at }}
                         </p>
                     </div>
+
+                    <nav class="flex flex-wrap gap-2 md:justify-end">
+                        <Link
+                            :href="`/t/${tournament.public_code}/live`"
+                            class="rounded-full bg-white px-4 py-2 text-sm font-medium text-zinc-950"
+                        >
+                            Live
+                        </Link>
+
+                        <Link
+                            :href="`/t/${tournament.public_code}/groups`"
+                            class="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition hover:bg-white/10"
+                        >
+                            Grupe
+                        </Link>
+                    </nav>
                 </div>
             </header>
 
