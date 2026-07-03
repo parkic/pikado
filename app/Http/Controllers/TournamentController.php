@@ -24,6 +24,7 @@ use App\Models\TournamentResource;
 use App\Models\Venue;
 use App\Models\TournamentGroup;
 use App\Models\TournamentParticipant;
+use App\Models\TournamentMatch;
 
 class TournamentController extends Controller
 {
@@ -148,6 +149,8 @@ class TournamentController extends Controller
 
         $totalSlots = $this->totalGroupSlots($tournament);
 
+        $podium = $this->tournamentPodium($tournament);
+
         return Inertia::render('Venues/Tournaments/Show', [
             'venue' => [
                 'id' => $venue->id,
@@ -182,6 +185,7 @@ class TournamentController extends Controller
                 'can_generate_group_matches' => $this->canGenerateGroupMatches($tournament, $totalSlots),
                 'can_complete_group_stage' => $this->canCompleteGroupStage($tournament),
                 'next_stage_after_groups' => $this->nextStageAfterGroups($tournament),
+                'podium' => $podium,
                 'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
@@ -711,6 +715,151 @@ class TournamentController extends Controller
         }
 
         return 'Nepoznat učesnik';
+    }
+
+    private function tournamentPodium(Tournament $tournament): array
+    {
+        $final = $this->knockoutSeriesResult($tournament, MatchStage::FINAL);
+        $thirdPlace = $this->knockoutSeriesResult($tournament, MatchStage::THIRD_PLACE);
+
+        return [
+            'champion' => $final['winner'],
+            'second_place' => $final['loser'],
+            'third_place' => $thirdPlace['winner'],
+            'fourth_place' => $thirdPlace['loser'],
+            'final_score' => $final['score'],
+            'third_place_score' => $thirdPlace['score'],
+            'is_complete' => $final['winner'] !== null && $thirdPlace['winner'] !== null,
+        ];
+    }
+
+    private function knockoutSeriesResult(Tournament $tournament, MatchStage $stage): array
+    {
+        $allMatches = TournamentMatch::query()
+            ->with([
+                'participantA.player',
+                'participantA.team',
+                'participantB.player',
+                'participantB.team',
+            ])
+            ->where('tournament_id', $tournament->id)
+            ->where('stage', $stage->value)
+            ->orderBy('bracket_position')
+            ->orderBy('round_robin_leg')
+            ->orderBy('id')
+            ->get();
+
+        if ($allMatches->isEmpty()) {
+            return [
+                'winner' => null,
+                'loser' => null,
+                'score' => null,
+            ];
+        }
+
+        $firstMatch = $allMatches->first();
+
+        $seriesMatches = $allMatches
+            ->filter(fn (TournamentMatch $match) => $match->bracket_round === $firstMatch->bracket_round
+                && (int) $match->bracket_position === (int) $firstMatch->bracket_position)
+            ->values();
+
+        $winsRequired = (int) ($firstMatch->wins_required ?: 1);
+
+        $winsByParticipant = [];
+        $seriesWinnerId = null;
+
+        foreach ($seriesMatches as $seriesMatch) {
+            if ($seriesMatch->status !== MatchStatus::FINISHED) {
+                continue;
+            }
+
+            if (! $seriesMatch->winner_participant_id) {
+                continue;
+            }
+
+            $winnerParticipantId = (int) $seriesMatch->winner_participant_id;
+
+            $winsByParticipant[$winnerParticipantId] =
+                ($winsByParticipant[$winnerParticipantId] ?? 0) + 1;
+
+            if ($winsByParticipant[$winnerParticipantId] >= $winsRequired) {
+                $seriesWinnerId = $winnerParticipantId;
+                break;
+            }
+        }
+
+        if (! $seriesWinnerId) {
+            return [
+                'winner' => null,
+                'loser' => null,
+                'score' => null,
+            ];
+        }
+
+        $seriesLoserId = $this->seriesOpponentId($seriesMatches, $seriesWinnerId);
+
+        $winnerWins = $winsByParticipant[$seriesWinnerId] ?? 0;
+        $loserWins = $seriesLoserId
+            ? ($winsByParticipant[$seriesLoserId] ?? 0)
+            : 0;
+
+        return [
+            'winner' => $this->participantSummary(
+                $this->participantFromSeries($seriesMatches, $seriesWinnerId)
+            ),
+            'loser' => $this->participantSummary(
+                $this->participantFromSeries($seriesMatches, $seriesLoserId)
+            ),
+            'score' => $winnerWins . ':' . $loserWins,
+        ];
+    }
+
+    private function seriesOpponentId($seriesMatches, int $winnerParticipantId): ?int
+    {
+        foreach ($seriesMatches as $seriesMatch) {
+            if ($seriesMatch->participant_a_id && (int) $seriesMatch->participant_a_id !== $winnerParticipantId) {
+                return (int) $seriesMatch->participant_a_id;
+            }
+
+            if ($seriesMatch->participant_b_id && (int) $seriesMatch->participant_b_id !== $winnerParticipantId) {
+                return (int) $seriesMatch->participant_b_id;
+            }
+        }
+
+        return null;
+    }
+
+    private function participantFromSeries($seriesMatches, ?int $participantId): ?TournamentParticipant
+    {
+        if (! $participantId) {
+            return null;
+        }
+
+        foreach ($seriesMatches as $seriesMatch) {
+            if ($seriesMatch->participantA && (int) $seriesMatch->participantA->id === $participantId) {
+                return $seriesMatch->participantA;
+            }
+
+            if ($seriesMatch->participantB && (int) $seriesMatch->participantB->id === $participantId) {
+                return $seriesMatch->participantB;
+            }
+        }
+
+        return null;
+    }
+
+    private function participantSummary(?TournamentParticipant $participant): ?array
+    {
+        if (! $participant) {
+            return null;
+        }
+
+        return [
+            'id' => $participant->id,
+            'display_name' => $this->participantDisplayName($participant),
+            'group_position' => $participant->group_position,
+        ];
     }
 
     private function totalGroupSlots(Tournament $tournament): int

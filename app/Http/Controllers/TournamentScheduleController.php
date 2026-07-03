@@ -254,6 +254,7 @@ class TournamentScheduleController extends Controller
             'round_of_16' => '1/8 finala',
             'quarter_final' => 'Četvrtfinale',
             'semi_final' => 'Polufinale',
+            'third_place' => 'Treće mesto',
             'final' => 'Finale',
             default => $bracketRound,
         };
