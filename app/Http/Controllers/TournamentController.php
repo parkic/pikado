@@ -497,7 +497,7 @@ class TournamentController extends Controller
 
         if (! $this->canCompleteGroupStage($tournament)) {
             return back()->withErrors([
-                'group_stage' => 'Grupna faza ne može biti završena dok svi grupni mečevi nisu završeni.',
+                'group_stage' => 'Grupna faza ne može biti završena dok svi grupni mečevi nisu završeni ili anulirani.',
             ]);
         }
 
@@ -934,7 +934,11 @@ class TournamentController extends Controller
 
         $unfinishedGroupMatchesCount = $tournament->matches()
             ->where('stage', MatchStage::GROUP->value)
-            ->where('status', '!=', MatchStatus::FINISHED->value)
+            ->whereNotIn('status', [
+                MatchStatus::FINISHED->value,
+                MatchStatus::VOIDED->value,
+                MatchStatus::CANCELLED->value,
+            ])
             ->count();
 
         return $unfinishedGroupMatchesCount === 0;

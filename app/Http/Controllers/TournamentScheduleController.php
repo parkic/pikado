@@ -58,11 +58,15 @@ class TournamentScheduleController extends Controller
                     'id' => $match->participantA->id,
                     'group_position' => $match->participantA->group_position,
                     'display_name' => $this->participantDisplayName($match->participantA),
+                    'status' => $match->participantA->status->value,
+                    'is_withdrawn' => $match->participantA->status->value === 'withdrawn',
                 ] : null,
                 'participant_b' => $match->participantB ? [
                     'id' => $match->participantB->id,
                     'group_position' => $match->participantB->group_position,
                     'display_name' => $this->participantDisplayName($match->participantB),
+                    'status' => $match->participantB->status->value,
+                    'is_withdrawn' => $match->participantB->status->value === 'withdrawn',
                 ] : null,
                 'score_a' => $match->score_a,
                 'score_b' => $match->score_b,
@@ -239,11 +243,11 @@ class TournamentScheduleController extends Controller
     private function statusLabel(MatchStatus $status): string
     {
         return match ($status) {
-            MatchStatus::SCHEDULED => 'Scheduled',
-            MatchStatus::IN_PROGRESS => 'In Progress',
-            MatchStatus::FINISHED => 'Finished',
-            MatchStatus::VOIDED => 'Voided',
-            MatchStatus::CANCELLED => 'Cancelled',
+            MatchStatus::SCHEDULED => 'Zakazano',
+            MatchStatus::IN_PROGRESS => 'U toku',
+            MatchStatus::FINISHED => 'Završeno',
+            MatchStatus::VOIDED => 'Anulirano',
+            MatchStatus::CANCELLED => 'Otkazano',
         };
     }
 

@@ -154,6 +154,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/standings/participants/{participant}/qualification-override', [TournamentStandingsController::class, 'updateQualificationOverride'])
         ->scopeBindings()
         ->name('venues.tournaments.standings.participants.qualification_override');
+
+    Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/standings/participants/{participant}/withdraw', [TournamentStandingsController::class, 'withdrawParticipant'])
+        ->scopeBindings()
+        ->name('venues.tournaments.standings.participants.withdraw');
+
+    Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/standings/participants/{participant}/restore', [TournamentStandingsController::class, 'restoreParticipant'])
+        ->scopeBindings()
+        ->name('venues.tournaments.standings.participants.restore');
+
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/qualification/setup', [TournamentController::class, 'setupQualification'])
         ->scopeBindings()
         ->name('venues.tournaments.qualification.setup');

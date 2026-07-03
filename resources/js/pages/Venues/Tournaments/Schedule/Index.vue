@@ -22,6 +22,8 @@ type Participant = {
     id: number;
     group_position: string | null;
     display_name: string;
+    status: string;
+    is_withdrawn: boolean;
 };
 
 type MatchResource = {
@@ -351,16 +353,30 @@ const tieBreakerWinnerButtonClasses = (match: Match, participantId: number): str
 
                                 <td class="px-4 py-3">
                                     <div class="font-medium">
-                                        <span>
+                                        <span :class="match.participant_a?.is_withdrawn ? 'text-muted-foreground line-through' : ''">
                                             {{ match.participant_a?.display_name ?? 'TBD' }}
+                                        </span>
+
+                                        <span
+                                            v-if="match.participant_a?.is_withdrawn"
+                                            class="ml-2 inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
+                                        >
+                                            Odustao
                                         </span>
 
                                         <span class="mx-2 text-muted-foreground">
                                             vs
                                         </span>
 
-                                        <span>
+                                        <span :class="match.participant_b?.is_withdrawn ? 'text-muted-foreground line-through' : ''">
                                             {{ match.participant_b?.display_name ?? 'TBD' }}
+                                        </span>
+
+                                        <span
+                                            v-if="match.participant_b?.is_withdrawn"
+                                            class="ml-2 inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
+                                        >
+                                            Odustao
                                         </span>
                                     </div>
 
@@ -416,7 +432,7 @@ const tieBreakerWinnerButtonClasses = (match: Match, participantId: number): str
                                             type="number"
                                             min="0"
                                             max="999"
-                                            class="w-16 rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-center text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                                            class="w-16 rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-center text-sm outline-none transition focus:border-primary disabled:opacity-50 dark:border-sidebar-border"
                                         >
 
                                         <span class="text-muted-foreground">
@@ -425,10 +441,11 @@ const tieBreakerWinnerButtonClasses = (match: Match, participantId: number): str
 
                                         <input
                                             v-model="resultForms[match.id].score_b"
+                                            :disabled="match.status === 'voided'"
                                             type="number"
                                             min="0"
                                             max="999"
-                                            class="w-16 rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-center text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                                            class="w-16 rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-center text-sm outline-none transition focus:border-primary disabled:opacity-50 dark:border-sidebar-border"
                                         >
 
                                         <button

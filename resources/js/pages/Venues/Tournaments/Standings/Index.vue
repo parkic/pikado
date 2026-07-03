@@ -13,6 +13,7 @@ type Tournament = {
     slug: string;
     status: string;
     status_label: string;
+    can_manage_withdrawals: boolean;
 };
 
 type StandingRow = {
@@ -26,7 +27,10 @@ type StandingRow = {
     points_against: number;
     points_difference: number;
     standing_points: number;
-    position: number;
+    position: number | null;
+    participant_status: string;
+    is_withdrawn: boolean;
+    withdrawn_at: string | null;
     qualification_status: string;
     qualification_label: string;
     qualification_override_status: string | null;
@@ -75,6 +79,10 @@ const qualificationBadgeClasses = (status: string): string => {
         return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300';
     }
 
+    if (status === 'withdrawn') {
+        return 'bg-red-500/10 text-red-700 dark:text-red-300';
+    }
+
     return 'bg-muted text-muted-foreground';
 };
 
@@ -86,6 +94,44 @@ const updateQualificationOverride = (row: StandingRow, event: Event) => {
         {
             qualification_override_status: target.value || null,
         },
+        {
+            preserveScroll: true,
+            preserveState: false,
+        },
+    );
+};
+
+const withdrawParticipant = (row: StandingRow) => {
+    const confirmed = window.confirm(
+        `Da li želiš da označiš učesnika "${row.display_name}" kao odustao? Njegovi grupni mečevi biće anulirani za tabelu.`,
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.patch(
+        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/standings/participants/${row.participant_id}/withdraw`,
+        {},
+        {
+            preserveScroll: true,
+            preserveState: false,
+        },
+    );
+};
+
+const restoreParticipant = (row: StandingRow) => {
+    const confirmed = window.confirm(
+        `Da li želiš da vratiš učesnika "${row.display_name}" u aktivne? Njegovi grupni mečevi biće vraćeni na prethodni status.`,
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.patch(
+        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/standings/participants/${row.participant_id}/restore`,
+        {},
         {
             preserveScroll: true,
             preserveState: false,
@@ -175,6 +221,9 @@ const updateQualificationOverride = (row: StandingRow, event: Event) => {
                             <span class="inline-flex rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
                                 Ispao
                             </span>
+                            <span class="inline-flex rounded-full bg-red-500/10 px-2.5 py-1 font-medium text-red-700 dark:text-red-300">
+                                Odustao
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -194,6 +243,7 @@ const updateQualificationOverride = (row: StandingRow, event: Event) => {
                                     <th class="px-3 py-3 text-center font-medium">+/-</th>
                                     <th class="px-3 py-3 text-center font-medium">Bod</th>
                                     <th class="px-3 py-3 text-center font-medium">Status</th>
+                                    <th class="px-3 py-3 text-center font-medium">Akcije</th>
                                 </tr>
                             </thead>
 
@@ -204,16 +254,25 @@ const updateQualificationOverride = (row: StandingRow, event: Event) => {
                                     class="border-b border-sidebar-border/70 last:border-b-0 dark:border-sidebar-border"
                                 >
                                     <td class="px-3 py-3 text-muted-foreground">
-                                        {{ row.position }}
+                                        {{ row.position ?? '-' }}
                                     </td>
 
                                     <td class="px-3 py-3">
-                                        <div class="font-medium">
+                                        <div
+                                            class="font-medium"
+                                            :class="row.is_withdrawn ? 'text-muted-foreground line-through' : ''"
+                                        >
                                             {{ row.display_name }}
                                         </div>
 
                                         <div class="mt-1 text-xs text-muted-foreground">
                                             {{ row.group_position ?? '-' }}
+                                        </div>
+                                        <div
+                                            v-if="row.is_withdrawn && row.withdrawn_at"
+                                            class="mt-1 text-xs text-red-600 dark:text-red-300"
+                                        >
+                                            Odustao: {{ row.withdrawn_at }}
                                         </div>
                                     </td>
 
@@ -255,7 +314,8 @@ const updateQualificationOverride = (row: StandingRow, event: Event) => {
 
                                             <select
                                                 :value="row.qualification_override_status ?? ''"
-                                                class="rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-xs outline-none transition focus:border-primary dark:border-sidebar-border"
+                                                :disabled="row.is_withdrawn"
+                                                class="rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-xs outline-none transition focus:border-primary disabled:opacity-50 dark:border-sidebar-border"
                                                 @change="updateQualificationOverride(row, $event)"
                                             >
                                                 <option value="">
@@ -282,6 +342,38 @@ const updateQualificationOverride = (row: StandingRow, event: Event) => {
                                                 Ručno podešeno
                                             </span>
                                         </div>
+                                    </td>
+
+                                    <td class="px-3 py-3">
+                                        <div
+                                            v-if="tournament.can_manage_withdrawals && tournament.status === 'group_stage'"
+                                            class="flex min-w-32 flex-col gap-2"
+                                        >
+                                            <button
+                                                v-if="!row.is_withdrawn"
+                                                type="button"
+                                                class="inline-flex items-center justify-center rounded-lg border border-red-500/30 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
+                                                @click="withdrawParticipant(row)"
+                                            >
+                                                Označi odustao
+                                            </button>
+
+                                            <button
+                                                v-else
+                                                type="button"
+                                                class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-3 py-2 text-xs font-medium transition hover:bg-muted dark:border-sidebar-border"
+                                                @click="restoreParticipant(row)"
+                                            >
+                                                Vrati
+                                            </button>
+                                        </div>
+
+                                        <span
+                                            v-else
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            -
+                                        </span>
                                     </td>
                                 </tr>
                             </tbody>

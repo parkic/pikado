@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\MatchStage;
 use App\Enums\MatchStatus;
+use App\Enums\ParticipantStatus;
 use App\Models\Tournament;
 use App\Models\TournamentGroup;
 use App\Models\TournamentMatch;
@@ -43,10 +44,15 @@ class GroupStandingsCalculator
         $rows = [];
 
         foreach ($group->participants as $participant) {
+            $isWithdrawn = $participant->status === ParticipantStatus::WITHDRAWN;
+
             $rows[$participant->id] = [
                 'participant_id' => $participant->id,
                 'group_position' => $participant->group_position,
                 'display_name' => $this->participantDisplayName($participant),
+                'participant_status' => $participant->status->value,
+                'is_withdrawn' => $isWithdrawn,
+                'withdrawn_at' => $participant->withdrawn_at?->format('d.m.Y. H:i'),
                 'played' => 0,
                 'wins' => 0,
                 'losses' => 0,
@@ -55,12 +61,19 @@ class GroupStandingsCalculator
                 'points_difference' => 0,
                 'standing_points' => 0,
                 'qualification_override_status' => $participant->qualification_override_status?->value,
+                'qualification_is_manual' => false,
                 'repechage_outcome_status' => $participant->repechage_outcome_status?->value,
                 'repechage_outcome_label' => $this->repechageOutcomeLabel($participant->repechage_outcome_status?->value),
             ];
         }
 
-        $finishedMatches = $group->matches
+        $countableMatches = $group->matches
+            ->reject(fn (TournamentMatch $match) => in_array($match->status, [
+                MatchStatus::VOIDED,
+                MatchStatus::CANCELLED,
+            ], true));
+
+        $finishedMatches = $countableMatches
             ->filter(fn (TournamentMatch $match) => $match->status === MatchStatus::FINISHED);
 
         foreach ($finishedMatches as $match) {
@@ -74,6 +87,13 @@ class GroupStandingsCalculator
             }
 
             if (! isset($rows[$match->participant_a_id], $rows[$match->participant_b_id])) {
+                continue;
+            }
+
+            if (
+                $rows[$match->participant_a_id]['is_withdrawn']
+                || $rows[$match->participant_b_id]['is_withdrawn']
+            ) {
                 continue;
             }
 
@@ -113,7 +133,8 @@ class GroupStandingsCalculator
                 $row['points_for'] - $row['points_against'];
         }
 
-        $sortedRows = collect($rows)
+        $activeRows = collect($rows)
+            ->reject(fn (array $row) => $row['is_withdrawn'])
             ->sortBy([
                 ['standing_points', 'desc'],
                 ['points_difference', 'desc'],
@@ -127,15 +148,33 @@ class GroupStandingsCalculator
                 $row['qualification_label'] = 'Ispao';
 
                 return $row;
-            })
-            ->all();
+            });
+
+        $withdrawnRows = collect($rows)
+            ->filter(fn (array $row) => $row['is_withdrawn'])
+            ->sortBy([
+                ['group_position', 'asc'],
+                ['display_name', 'asc'],
+            ])
+            ->values()
+            ->map(function (array $row) {
+                $row['position'] = null;
+                $row['qualification_status'] = 'withdrawn';
+                $row['qualification_label'] = 'Odustao';
+                $row['qualification_is_manual'] = false;
+
+                return $row;
+            });
 
         return [
             'id' => $group->id,
             'name' => $group->name,
-            'matches_count' => $group->matches->count(),
+            'matches_count' => $countableMatches->count(),
             'finished_matches_count' => $finishedMatches->count(),
-            'rows' => $sortedRows,
+            'rows' => $activeRows
+                ->concat($withdrawnRows)
+                ->values()
+                ->all(),
         ];
     }
 
@@ -175,6 +214,16 @@ class GroupStandingsCalculator
                     $repechageEnabled,
                     $repechagePerGroup
                 ) {
+                    $row['qualification_is_manual'] = false;
+
+                    if ($row['is_withdrawn']) {
+                        $row['qualification_status'] = 'withdrawn';
+                        $row['qualification_label'] = 'Odustao';
+                        $row['qualification_override_status'] = null;
+
+                        return $row;
+                    }
+
                     if ($directQualifiersPerGroup > 0 && $row['position'] <= $directQualifiersPerGroup) {
                         $row['qualification_status'] = 'direct';
                         $row['qualification_label'] = 'Direktan prolaz';
@@ -244,6 +293,7 @@ class GroupStandingsCalculator
             'direct' => 'Direktan prolaz',
             'repechage' => 'Repasaž',
             'eliminated' => 'Ispao',
+            'withdrawn' => 'Odustao',
             default => '-',
         };
     }
