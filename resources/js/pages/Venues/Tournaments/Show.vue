@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
 type Venue = {
     id: number;
@@ -169,6 +170,55 @@ const participantForSlot = (
         return participant.group_position === `${group.name}${slotNumber}`;
     });
 };
+
+const copiedPublicLink = ref<string | null>(null);
+
+const publicBaseUrl = computed(() => {
+    if (typeof window === 'undefined') {
+        return '';
+    }
+
+    return `${window.location.origin}/t/${props.tournament.public_code}`;
+});
+
+const publicLinks = computed(() => [
+    {
+        key: 'live',
+        label: 'Live',
+        description: 'Glavna public strana sa trenutnim, sledećim i poslednjim mečevima.',
+        url: `${publicBaseUrl.value}/live`,
+    },
+    {
+        key: 'groups',
+        label: 'Grupe',
+        description: 'Tabela grupa, prolaz, repasaž i grupni mečevi.',
+        url: `${publicBaseUrl.value}/groups`,
+    },
+    {
+        key: 'schedule',
+        label: 'Raspored',
+        description: 'Kompletan public raspored svih mečeva.',
+        url: `${publicBaseUrl.value}/schedule`,
+    },
+    {
+        key: 'knockout',
+        label: 'Nokaut',
+        description: 'Public prikaz nokaut serija, legova i pobednika.',
+        url: `${publicBaseUrl.value}/knockout`,
+    },
+]);
+
+const copyPublicLink = async (key: string, url: string) => {
+    await navigator.clipboard.writeText(url);
+
+    copiedPublicLink.value = key;
+
+    window.setTimeout(() => {
+        if (copiedPublicLink.value === key) {
+            copiedPublicLink.value = null;
+        }
+    }, 1600);
+};
 </script>
 
 <template>
@@ -303,7 +353,7 @@ const participantForSlot = (
             </div>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-8">
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
             <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
                 <p class="text-sm text-muted-foreground">
                     Igra
@@ -373,31 +423,108 @@ const participantForSlot = (
                     {{ tournament.resources.length }}
                 </p>
             </div>
+        </div>
 
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-                <p class="text-sm text-muted-foreground">
-                    Public link
-                </p>
+        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <h2 class="text-lg font-medium">
+                            Public prikaz
+                        </h2>
 
-                <p class="mt-2 break-all text-sm font-medium">
-                    /t/{{ tournament.public_code }}/live
-                </p>
+                        <span
+                            v-if="tournament.public_enabled"
+                            class="inline-flex w-fit rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+                        >
+                            Public uključen
+                        </span>
 
-                <Link
+                        <span
+                            v-else
+                            class="inline-flex w-fit rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground"
+                        >
+                            Public isključen
+                        </span>
+                    </div>
+
+                    <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
+                        Linkovi koje možeš da pošalješ igračima ili otvoriš na TV-u. Ove strane rade bez login-a.
+                    </p>
+                </div>
+
+                <div
                     v-if="tournament.public_enabled"
-                    :href="`/t/${tournament.public_code}/live`"
-                    target="_blank"
-                    class="mt-3 inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-3 py-2 text-xs font-medium transition hover:bg-muted dark:border-sidebar-border"
+                    class="flex flex-col gap-2 sm:flex-row"
                 >
-                    Otvori
-                </Link>
+                    <a
+                        :href="`${publicBaseUrl}/live`"
+                        target="_blank"
+                        class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+                    >
+                        Otvori Live
+                    </a>
 
-                <p
-                    v-else
-                    class="mt-3 text-xs text-muted-foreground"
+                    <button
+                        type="button"
+                        class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+                        @click="copyPublicLink('live-main', `${publicBaseUrl}/live`)"
+                    >
+                        {{ copiedPublicLink === 'live-main' ? 'Kopirano' : 'Kopiraj Live link' }}
+                    </button>
+                </div>
+            </div>
+
+            <div
+                v-if="tournament.public_enabled"
+                class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+            >
+                <div
+                    v-for="publicLink in publicLinks"
+                    :key="publicLink.key"
+                    class="rounded-lg border border-sidebar-border/70 p-4 dark:border-sidebar-border"
                 >
-                    Public prikaz je isključen.
-                </p>
+                    <div class="flex h-full flex-col gap-3">
+                        <div>
+                            <p class="font-medium">
+                                {{ publicLink.label }}
+                            </p>
+
+                            <p class="mt-1 text-sm text-muted-foreground">
+                                {{ publicLink.description }}
+                            </p>
+
+                            <p class="mt-3 break-all rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                                {{ publicLink.url }}
+                            </p>
+                        </div>
+
+                        <div class="mt-auto flex flex-col gap-2 sm:flex-row">
+                            <a
+                                :href="publicLink.url"
+                                target="_blank"
+                                class="inline-flex flex-1 items-center justify-center rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+                            >
+                                Otvori
+                            </a>
+
+                            <button
+                                type="button"
+                                class="inline-flex flex-1 items-center justify-center rounded-lg border border-sidebar-border/70 px-3 py-2 text-xs font-medium transition hover:bg-muted dark:border-sidebar-border"
+                                @click="copyPublicLink(publicLink.key, publicLink.url)"
+                            >
+                                {{ copiedPublicLink === publicLink.key ? 'Kopirano' : 'Kopiraj' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                v-else
+                class="mt-4 rounded-lg border border-dashed border-sidebar-border/70 p-4 text-sm text-muted-foreground dark:border-sidebar-border"
+            >
+                Public prikaz je trenutno isključen za ovaj turnir.
             </div>
         </div>
 
