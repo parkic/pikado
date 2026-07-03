@@ -40,12 +40,55 @@ type KnockoutParticipant = {
     source_label: string;
 };
 
+type SeriesParticipant = {
+    id: number;
+    display_name: string;
+    group_position: string | null;
+} | null;
+
+type KnockoutLeg = {
+    id: number;
+    leg: number;
+    status: string;
+    status_label: string;
+    score: string | null;
+    winner: SeriesParticipant;
+    resource_name: string | null;
+};
+
+type KnockoutSeries = {
+    round_key: string;
+    round_label: string;
+    round_sort: number;
+    position: number;
+    title: string;
+    wins_required: number;
+    max_legs: number;
+    participant_a: SeriesParticipant;
+    participant_b: SeriesParticipant;
+    participant_a_wins: number;
+    participant_b_wins: number;
+    series_score: string;
+    winner: SeriesParticipant;
+    status: string;
+    status_label: string;
+    legs: KnockoutLeg[];
+};
+
+type KnockoutRound = {
+    round_key: string;
+    round_label: string;
+    round_sort: number;
+    series: KnockoutSeries[];
+};
+
 const props = defineProps<{
     venue: Venue;
     tournament: Tournament;
     direct_qualifiers: KnockoutParticipant[];
     repechage_qualifiers: KnockoutParticipant[];
     knockout_participants: KnockoutParticipant[];
+    knockout_series: KnockoutRound[];
 }>();
 
 defineOptions({
@@ -73,6 +116,38 @@ const differenceLabel = (difference: number): string => {
     }
 
     return String(difference);
+};
+
+const seriesStatusClasses = (status: string): string => {
+    if (status === 'finished') {
+        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+    }
+
+    if (status === 'in_progress') {
+        return 'bg-primary/10 text-primary';
+    }
+
+    if (status === 'waiting_participants') {
+        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300';
+    }
+
+    return 'bg-muted text-muted-foreground';
+};
+
+const legStatusClasses = (status: string): string => {
+    if (status === 'finished') {
+        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+    }
+
+    if (status === 'voided') {
+        return 'bg-muted text-muted-foreground';
+    }
+
+    if (status === 'in_progress') {
+        return 'bg-primary/10 text-primary';
+    }
+
+    return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300';
 };
 
 const generateKnockoutBracket = () => {
@@ -222,6 +297,163 @@ const generateKnockoutBracket = () => {
                 Potrebno je da broj učesnika za nokaut bude tačno {{ tournament.knockout_size ?? '-' }}.
                 Trenutno ih ima {{ tournament.knockout_participants_count }}.
             </p>
+        </div>
+
+        <div
+            v-if="knockout_series.length"
+            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+        >
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <h2 class="text-lg font-medium">
+                        Nokaut serije
+                    </h2>
+
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        Pregled nokaut duela po rundama. Rezultati se i dalje unose kroz raspored, a ovde se vidi stanje cele serije.
+                    </p>
+                </div>
+
+                <Link
+                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/schedule`"
+                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                >
+                    Unesi rezultate
+                </Link>
+            </div>
+
+            <div class="mt-6 space-y-8">
+                <section
+                    v-for="round in knockout_series"
+                    :key="round.round_key"
+                >
+                    <div class="mb-3 flex items-center justify-between gap-4">
+                        <h3 class="text-base font-semibold">
+                            {{ round.round_label }}
+                        </h3>
+
+                        <span class="text-sm text-muted-foreground">
+                            {{ round.series.length }} serija
+                        </span>
+                    </div>
+
+                    <div class="grid gap-4 xl:grid-cols-2">
+                        <article
+                            v-for="series in round.series"
+                            :key="`${series.round_key}-${series.position}`"
+                            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+                        >
+                            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                    <h4 class="font-medium">
+                                        {{ series.title }}
+                                    </h4>
+
+                                    <p class="mt-1 text-sm text-muted-foreground">
+                                        Na {{ series.wins_required }} dobijene · maksimalno {{ series.max_legs }} partija
+                                    </p>
+                                </div>
+
+                                <span
+                                    class="inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium"
+                                    :class="seriesStatusClasses(series.status)"
+                                >
+                                    {{ series.status_label }}
+                                </span>
+                            </div>
+
+                            <div class="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-lg bg-muted/40 p-3">
+                                <div>
+                                    <p class="font-medium">
+                                        {{ series.participant_a?.display_name ?? 'Čeka učesnika' }}
+                                    </p>
+
+                                    <p
+                                        v-if="series.participant_a?.group_position"
+                                        class="mt-1 text-xs text-muted-foreground"
+                                    >
+                                        {{ series.participant_a.group_position }}
+                                    </p>
+                                </div>
+
+                                <div class="rounded-lg bg-background px-3 py-2 text-center text-xl font-semibold">
+                                    {{ series.series_score }}
+                                </div>
+
+                                <div class="text-right">
+                                    <p class="font-medium">
+                                        {{ series.participant_b?.display_name ?? 'Čeka učesnika' }}
+                                    </p>
+
+                                    <p
+                                        v-if="series.participant_b?.group_position"
+                                        class="mt-1 text-xs text-muted-foreground"
+                                    >
+                                        {{ series.participant_b.group_position }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div
+                                v-if="series.winner"
+                                class="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300"
+                            >
+                                Pobednik serije:
+                                <span class="font-semibold">
+                                    {{ series.winner.display_name }}
+                                </span>
+                            </div>
+
+                            <div class="mt-4 overflow-hidden rounded-lg border border-sidebar-border/70 dark:border-sidebar-border">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border">
+                                        <tr>
+                                            <th class="px-3 py-2 font-medium">Partija</th>
+                                            <th class="px-3 py-2 text-center font-medium">Status</th>
+                                            <th class="px-3 py-2 text-center font-medium">Rezultat</th>
+                                            <th class="px-3 py-2 font-medium">Pobednik</th>
+                                            <th class="px-3 py-2 font-medium">Resource</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        <tr
+                                            v-for="leg in series.legs"
+                                            :key="leg.id"
+                                            class="border-b border-sidebar-border/70 last:border-b-0 dark:border-sidebar-border"
+                                        >
+                                            <td class="px-3 py-2 text-muted-foreground">
+                                                Leg {{ leg.leg }}
+                                            </td>
+
+                                            <td class="px-3 py-2 text-center">
+                                                <span
+                                                    class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+                                                    :class="legStatusClasses(leg.status)"
+                                                >
+                                                    {{ leg.status_label }}
+                                                </span>
+                                            </td>
+
+                                            <td class="px-3 py-2 text-center font-medium">
+                                                {{ leg.score ?? '-' }}
+                                            </td>
+
+                                            <td class="px-3 py-2">
+                                                {{ leg.winner?.display_name ?? '-' }}
+                                            </td>
+
+                                            <td class="px-3 py-2 text-muted-foreground">
+                                                {{ leg.resource_name ?? '-' }}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+            </div>
         </div>
 
         <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
