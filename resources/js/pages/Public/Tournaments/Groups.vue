@@ -162,6 +162,13 @@ const matchStatusClasses = (status: string): string => {
                         >
                             Raspored
                         </Link>
+
+                        <Link
+                            :href="`/t/${tournament.public_code}/knockout`"
+                            class="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition hover:bg-white/10"
+                        >
+                            Nokaut
+                        </Link>
                     </nav>
                 </div>
             </header>

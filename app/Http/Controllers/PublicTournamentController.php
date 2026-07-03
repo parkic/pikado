@@ -7,9 +7,11 @@ use App\Enums\MatchStage;
 use App\Models\Tournament;
 use App\Models\TournamentMatch;
 use App\Models\TournamentParticipant;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 use App\Services\GroupStandingsCalculator;
+
 
 class PublicTournamentController extends Controller
 {
@@ -237,6 +239,65 @@ class PublicTournamentController extends Controller
         ]);
     }
 
+    public function knockout(string $publicCode): Response
+    {
+        $tournament = Tournament::query()
+            ->with([
+                'venue',
+            ])
+            ->where('public_code', $publicCode)
+            ->where('public_enabled', true)
+            ->firstOrFail();
+
+        $knockoutMatchesCount = $tournament->matches()
+            ->whereIn('stage', [
+                MatchStage::KNOCKOUT->value,
+                MatchStage::THIRD_PLACE->value,
+                MatchStage::FINAL->value,
+            ])
+            ->count();
+
+        $finishedKnockoutMatchesCount = $tournament->matches()
+            ->whereIn('stage', [
+                MatchStage::KNOCKOUT->value,
+                MatchStage::THIRD_PLACE->value,
+                MatchStage::FINAL->value,
+            ])
+            ->where('status', MatchStatus::FINISHED->value)
+            ->count();
+
+        $voidedKnockoutMatchesCount = $tournament->matches()
+            ->whereIn('stage', [
+                MatchStage::KNOCKOUT->value,
+                MatchStage::THIRD_PLACE->value,
+                MatchStage::FINAL->value,
+            ])
+            ->where('status', MatchStatus::VOIDED->value)
+            ->count();
+
+        return Inertia::render('Public/Tournaments/Knockout', [
+            'venue' => [
+                'name' => $tournament->venue->name,
+                'slug' => $tournament->venue->slug,
+                'logo_path' => $tournament->venue->logo_path,
+            ],
+            'tournament' => [
+                'id' => $tournament->id,
+                'name' => $tournament->name,
+                'public_code' => $tournament->public_code,
+                'game_type' => $tournament->game_type->value,
+                'match_mode' => $tournament->match_mode->value,
+                'status' => $tournament->status->value,
+                'status_label' => $this->tournamentStatusLabel($tournament->status->value),
+                'knockout_size' => $tournament->knockout_size,
+                'knockout_matches_count' => $knockoutMatchesCount,
+                'finished_knockout_matches_count' => $finishedKnockoutMatchesCount,
+                'voided_knockout_matches_count' => $voidedKnockoutMatchesCount,
+            ],
+            'rounds' => $this->publicKnockoutRounds($tournament),
+        ]);
+    }
+
     private function matchSummary(TournamentMatch $match): array
     {
         return [
@@ -293,6 +354,209 @@ class PublicTournamentController extends Controller
         }
 
         return 'Učesnik #' . $participant->id;
+    }
+
+    private function publicKnockoutRounds(Tournament $tournament): Collection
+    {
+        $matches = TournamentMatch::query()
+            ->with([
+                'participantA.player',
+                'participantA.team',
+                'participantB.player',
+                'participantB.team',
+                'winner.player',
+                'winner.team',
+                'resource',
+            ])
+            ->where('tournament_id', $tournament->id)
+            ->whereIn('stage', [
+                MatchStage::KNOCKOUT->value,
+                MatchStage::THIRD_PLACE->value,
+                MatchStage::FINAL->value,
+            ])
+            ->orderBy('bracket_position')
+            ->orderBy('round_robin_leg')
+            ->orderBy('id')
+            ->get();
+
+        return $matches
+            ->groupBy(function (TournamentMatch $match) {
+                return ($match->bracket_round ?: $match->stage->value) . '-' . ($match->bracket_position ?: 0);
+            })
+            ->map(fn (Collection $seriesMatches) => $this->publicKnockoutSeriesSummary($seriesMatches))
+            ->sortBy([
+                ['round_sort', 'asc'],
+                ['position', 'asc'],
+            ])
+            ->values()
+            ->groupBy('round_key')
+            ->map(function (Collection $series, string $roundKey) {
+                $firstSeries = $series->first();
+
+                return [
+                    'round_key' => $roundKey,
+                    'round_label' => $firstSeries['round_label'],
+                    'round_sort' => $firstSeries['round_sort'],
+                    'series' => $series->values(),
+                ];
+            })
+            ->sortBy('round_sort')
+            ->values();
+    }
+
+    private function publicKnockoutSeriesSummary(Collection $seriesMatches): array
+    {
+        $seriesMatches = $seriesMatches
+            ->sortBy([
+                ['round_robin_leg', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->values();
+
+        /** @var TournamentMatch $firstMatch */
+        $firstMatch = $seriesMatches->first();
+
+        $roundKey = $firstMatch->bracket_round ?: $firstMatch->stage->value;
+        $roundLabel = $this->bracketRoundLabel($roundKey) ?: $this->matchStageLabel($firstMatch->stage->value);
+        $winsRequired = (int) ($firstMatch->wins_required ?: 1);
+
+        $participantA = $this->participantFromSeries($seriesMatches, $firstMatch->participant_a_id);
+        $participantB = $this->participantFromSeries($seriesMatches, $firstMatch->participant_b_id);
+
+        $participantAWins = $seriesMatches
+            ->filter(fn (TournamentMatch $match) => $match->status === MatchStatus::FINISHED)
+            ->filter(fn (TournamentMatch $match) => (int) $match->winner_participant_id === (int) $firstMatch->participant_a_id)
+            ->count();
+
+        $participantBWins = $seriesMatches
+            ->filter(fn (TournamentMatch $match) => $match->status === MatchStatus::FINISHED)
+            ->filter(fn (TournamentMatch $match) => (int) $match->winner_participant_id === (int) $firstMatch->participant_b_id)
+            ->count();
+
+        $winnerParticipantId = null;
+
+        if ($firstMatch->participant_a_id && $participantAWins >= $winsRequired) {
+            $winnerParticipantId = $firstMatch->participant_a_id;
+        }
+
+        if ($firstMatch->participant_b_id && $participantBWins >= $winsRequired) {
+            $winnerParticipantId = $firstMatch->participant_b_id;
+        }
+
+        $finishedLegsCount = $seriesMatches
+            ->filter(fn (TournamentMatch $match) => $match->status === MatchStatus::FINISHED)
+            ->count();
+
+        $status = $this->publicKnockoutSeriesStatus(
+            $participantA,
+            $participantB,
+            $winnerParticipantId,
+            $finishedLegsCount
+        );
+
+        return [
+            'round_key' => $roundKey,
+            'round_label' => $roundLabel,
+            'round_sort' => $this->bracketRoundSort($roundKey),
+            'position' => (int) ($firstMatch->bracket_position ?: 0),
+            'title' => $roundLabel . ($firstMatch->bracket_position ? ' #' . $firstMatch->bracket_position : ''),
+            'wins_required' => $winsRequired,
+            'max_legs' => $seriesMatches->count(),
+            'participant_a' => $this->participantSummary($participantA),
+            'participant_b' => $this->participantSummary($participantB),
+            'participant_a_wins' => $participantAWins,
+            'participant_b_wins' => $participantBWins,
+            'series_score' => $participantAWins . ' : ' . $participantBWins,
+            'winner' => $this->participantSummary(
+                $this->participantFromSeries($seriesMatches, $winnerParticipantId)
+            ),
+            'status' => $status['status'],
+            'status_label' => $status['label'],
+            'legs' => $seriesMatches
+                ->map(fn (TournamentMatch $match) => [
+                    'id' => $match->id,
+                    'leg' => $match->round_robin_leg,
+                    'status' => $match->status->value,
+                    'status_label' => $this->matchStatusLabel($match->status->value),
+                    'score' => $match->score_a !== null && $match->score_b !== null
+                        ? $match->score_a . ' : ' . $match->score_b
+                        : null,
+                    'winner' => $this->participantSummary($match->winner),
+                    'resource_name' => $match->resource?->name,
+                    'win_reason' => $match->win_reason?->value,
+                ])
+                ->values(),
+        ];
+    }
+
+    private function participantFromSeries(Collection $seriesMatches, ?int $participantId): ?TournamentParticipant
+    {
+        if (! $participantId) {
+            return null;
+        }
+
+        foreach ($seriesMatches as $match) {
+            /** @var TournamentMatch $match */
+            if ($match->participantA && (int) $match->participantA->id === (int) $participantId) {
+                return $match->participantA;
+            }
+
+            if ($match->participantB && (int) $match->participantB->id === (int) $participantId) {
+                return $match->participantB;
+            }
+
+            if ($match->winner && (int) $match->winner->id === (int) $participantId) {
+                return $match->winner;
+            }
+        }
+
+        return null;
+    }
+
+    private function publicKnockoutSeriesStatus(
+        ?TournamentParticipant $participantA,
+        ?TournamentParticipant $participantB,
+        ?int $winnerParticipantId,
+        int $finishedLegsCount
+    ): array {
+        if ($winnerParticipantId) {
+            return [
+                'status' => 'finished',
+                'label' => 'Završeno',
+            ];
+        }
+
+        if (! $participantA || ! $participantB) {
+            return [
+                'status' => 'waiting_participants',
+                'label' => 'Čeka učesnike',
+            ];
+        }
+
+        if ($finishedLegsCount > 0) {
+            return [
+                'status' => 'in_progress',
+                'label' => 'U toku',
+            ];
+        }
+
+        return [
+            'status' => 'scheduled',
+            'label' => 'Zakazano',
+        ];
+    }
+
+    private function bracketRoundSort(?string $bracketRound): int
+    {
+        return match ($bracketRound) {
+            'round_of_32' => 10,
+            'round_of_16' => 20,
+            'quarter_final' => 30,
+            'semi_final' => 40,
+            'third_place' => 50,
+            'final' => 60,
+            default => 999,
+        };
     }
 
     private function tournamentStatusLabel(string $status): string

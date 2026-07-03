@@ -23,6 +23,8 @@ Route::get('/t/{publicCode}/groups', [PublicTournamentController::class, 'groups
     ->name('public.tournaments.groups');
 Route::get('/t/{publicCode}/schedule', [PublicTournamentController::class, 'schedule'])
     ->name('public.tournaments.schedule');
+Route::get('/t/{publicCode}/knockout', [PublicTournamentController::class, 'knockout'])
+    ->name('public.tournaments.knockout');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
