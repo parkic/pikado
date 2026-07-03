@@ -160,6 +160,13 @@ const statusClasses = (status: string): string => {
                         >
                             Grupe
                         </Link>
+
+                        <Link
+                            :href="`/t/${tournament.public_code}/schedule`"
+                            class="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition hover:bg-white/10"
+                        >
+                            Raspored
+                        </Link>
                     </nav>
                 </div>
             </header>

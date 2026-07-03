@@ -166,10 +166,82 @@ class PublicTournamentController extends Controller
         ]);
     }
 
+    public function schedule(string $publicCode): Response
+    {
+        $tournament = Tournament::query()
+            ->with([
+                'venue',
+            ])
+            ->where('public_code', $publicCode)
+            ->where('public_enabled', true)
+            ->firstOrFail();
+
+        $matchesQuery = $tournament->matches()
+            ->with([
+                'group',
+                'participantA.player',
+                'participantA.team',
+                'participantB.player',
+                'participantB.team',
+                'winner.player',
+                'winner.team',
+                'resource',
+            ]);
+
+        $matchesCount = (clone $matchesQuery)->count();
+
+        $scheduledMatchesCount = (clone $matchesQuery)
+            ->where('status', MatchStatus::SCHEDULED->value)
+            ->count();
+
+        $inProgressMatchesCount = (clone $matchesQuery)
+            ->where('status', MatchStatus::IN_PROGRESS->value)
+            ->count();
+
+        $finishedMatchesCount = (clone $matchesQuery)
+            ->where('status', MatchStatus::FINISHED->value)
+            ->count();
+
+        $voidedMatchesCount = (clone $matchesQuery)
+            ->where('status', MatchStatus::VOIDED->value)
+            ->count();
+
+        $matches = (clone $matchesQuery)
+            ->orderBy('scheduled_order')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (TournamentMatch $match) => $this->matchSummary($match))
+            ->values();
+
+        return Inertia::render('Public/Tournaments/Schedule', [
+            'venue' => [
+                'name' => $tournament->venue->name,
+                'slug' => $tournament->venue->slug,
+                'logo_path' => $tournament->venue->logo_path,
+            ],
+            'tournament' => [
+                'id' => $tournament->id,
+                'name' => $tournament->name,
+                'public_code' => $tournament->public_code,
+                'game_type' => $tournament->game_type->value,
+                'match_mode' => $tournament->match_mode->value,
+                'status' => $tournament->status->value,
+                'status_label' => $this->tournamentStatusLabel($tournament->status->value),
+                'matches_count' => $matchesCount,
+                'scheduled_matches_count' => $scheduledMatchesCount,
+                'in_progress_matches_count' => $inProgressMatchesCount,
+                'finished_matches_count' => $finishedMatchesCount,
+                'voided_matches_count' => $voidedMatchesCount,
+            ],
+            'matches' => $matches,
+        ]);
+    }
+
     private function matchSummary(TournamentMatch $match): array
     {
         return [
             'id' => $match->id,
+            'scheduled_order' => $match->scheduled_order,
             'stage' => $match->stage->value,
             'stage_label' => $this->matchStageLabel($match->stage->value),
             'group_name' => $match->group?->name,
@@ -186,6 +258,7 @@ class PublicTournamentController extends Controller
             'status' => $match->status->value,
             'status_label' => $this->matchStatusLabel($match->status->value),
             'resource_name' => $match->resource?->name,
+            'finished_at' => $match->finished_at?->format('d.m.Y. H:i'),
         ];
     }
 
