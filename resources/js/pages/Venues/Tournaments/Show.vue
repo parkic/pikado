@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import QRCode from 'qrcode';
+import { computed, ref, watch } from 'vue';
 
 type Venue = {
     id: number;
@@ -181,12 +182,16 @@ const publicBaseUrl = computed(() => {
     return `${window.location.origin}/t/${props.tournament.public_code}`;
 });
 
+const publicLiveUrl = computed(() => `${publicBaseUrl.value}/live`);
+
+const publicQrCodeDataUrl = ref<string | null>(null);
+
 const publicLinks = computed(() => [
     {
         key: 'live',
         label: 'Live',
         description: 'Glavna public strana sa trenutnim, sledećim i poslednjim mečevima.',
-        url: `${publicBaseUrl.value}/live`,
+        url: publicLiveUrl.value,
     },
     {
         key: 'groups',
@@ -207,6 +212,34 @@ const publicLinks = computed(() => [
         url: `${publicBaseUrl.value}/knockout`,
     },
 ]);
+
+const generatePublicQrCode = async () => {
+    if (
+        !props.tournament.public_enabled
+        || !publicLiveUrl.value
+        || typeof window === 'undefined'
+    ) {
+        publicQrCodeDataUrl.value = null;
+
+        return;
+    }
+
+    publicQrCodeDataUrl.value = await QRCode.toDataURL(publicLiveUrl.value, {
+        width: 420,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+    });
+};
+
+watch(
+    publicLiveUrl,
+    () => {
+        void generatePublicQrCode();
+    },
+    {
+        immediate: true,
+    },
+);
 
 const copyPublicLink = async (key: string, url: string) => {
     await navigator.clipboard.writeText(url);
@@ -472,6 +505,72 @@ const copyPublicLink = async (key: string, url: string) => {
                     >
                         {{ copiedPublicLink === 'live-main' ? 'Kopirano' : 'Kopiraj Live link' }}
                     </button>
+                </div>
+            </div>
+
+            <div
+                v-if="tournament.public_enabled"
+                class="mt-4 grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]"
+            >
+                <div class="rounded-lg border border-sidebar-border/70 bg-background p-4 dark:border-sidebar-border">
+                    <div
+                        v-if="publicQrCodeDataUrl"
+                        class="rounded-lg bg-white p-3"
+                    >
+                        <img
+                            :src="publicQrCodeDataUrl"
+                            alt="QR kod za public live prikaz"
+                            class="h-auto w-full"
+                        >
+                    </div>
+
+                    <div
+                        v-else
+                        class="flex aspect-square items-center justify-center rounded-lg border border-dashed border-sidebar-border/70 text-sm text-muted-foreground dark:border-sidebar-border"
+                    >
+                        QR se generiše...
+                    </div>
+                </div>
+
+                <div class="rounded-lg border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+                    <p class="font-medium">
+                        QR kod za Live prikaz
+                    </p>
+
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        Ovaj QR vodi direktno na public live stranu turnira. Možeš ga otvoriti na TV-u, odštampati ili poslati igračima.
+                    </p>
+
+                    <p class="mt-3 break-all rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                        {{ publicLiveUrl }}
+                    </p>
+
+                    <div class="mt-4 flex flex-col gap-2 sm:flex-row">
+                        <a
+                            :href="publicLiveUrl"
+                            target="_blank"
+                            class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                        >
+                            Otvori Live
+                        </a>
+
+                        <button
+                            type="button"
+                            class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+                            @click="copyPublicLink('qr-live', publicLiveUrl)"
+                        >
+                            {{ copiedPublicLink === 'qr-live' ? 'Kopirano' : 'Kopiraj link' }}
+                        </button>
+
+                        <a
+                            v-if="publicQrCodeDataUrl"
+                            :href="publicQrCodeDataUrl"
+                            :download="`${tournament.slug}-public-live-qr.png`"
+                            class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+                        >
+                            Preuzmi QR
+                        </a>
+                    </div>
                 </div>
             </div>
 
