@@ -21,6 +21,8 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
+use App\Events\TournamentLiveUpdated;
+
 
 class TournamentScheduleController extends Controller
 {
@@ -210,6 +212,8 @@ class TournamentScheduleController extends Controller
 
         $this->resolveKnockoutSeries($match->fresh());
 
+        event(new TournamentLiveUpdated($tournament->fresh(), 'match_result_updated'));
+
         return back()->with('success', 'Rezultat je sačuvan.');
     }
 
@@ -389,6 +393,8 @@ class TournamentScheduleController extends Controller
         });
 
         $this->resolveKnockoutSeries($firstMatch->fresh());
+
+        event(new TournamentLiveUpdated($tournament->fresh(), 'knockout_walkover_applied'));
 
         return back()->with('success', 'Walkover je primenjen i protivnik je prošao dalje.');
     }

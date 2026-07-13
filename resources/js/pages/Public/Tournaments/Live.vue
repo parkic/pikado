@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 type Venue = {
     name: string;
@@ -67,7 +68,7 @@ type TournamentPodium = {
     is_complete: boolean;
 };
 
-defineProps<{
+const props = defineProps<{
     venue: Venue;
     tournament: Tournament;
     active_matches: PublicMatch[];
@@ -75,6 +76,58 @@ defineProps<{
     recent_matches: PublicMatch[];
     podium: TournamentPodium;
 }>();
+
+const realtimeStatus = ref<'connecting' | 'connected' | 'updated' | 'error'>('connecting');
+const lastRealtimeUpdateAt = ref<string | null>(null);
+
+const formatRealtimeTime = (): string => {
+    return new Date().toLocaleTimeString('sr-RS', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+};
+
+const reloadLiveData = () => {
+    realtimeStatus.value = 'updated';
+    lastRealtimeUpdateAt.value = formatRealtimeTime();
+
+    router.reload({
+        only: [
+            'tournament',
+            'active_matches',
+            'next_matches',
+            'recent_matches',
+            'podium',
+        ],
+        preserveScroll: true,
+        preserveState: true,
+    });
+};
+
+onMounted(() => {
+    if (!window.Echo) {
+        realtimeStatus.value = 'error';
+
+        return;
+    }
+
+    realtimeStatus.value = 'connected';
+
+    window.Echo
+        .channel(`public-tournament.${props.tournament.public_code}`)
+        .listen('.TournamentLiveUpdated', () => {
+            reloadLiveData();
+        });
+});
+
+onBeforeUnmount(() => {
+    if (!window.Echo) {
+        return;
+    }
+
+    window.Echo.leave(`public-tournament.${props.tournament.public_code}`);
+});
 
 const matchContextLabel = (match: PublicMatch): string => {
     if (match.group_name) {
@@ -148,6 +201,39 @@ const podiumCardClasses = (place: number): string => {
 
                             <span class="rounded-full bg-white/10 px-3 py-1 text-sm text-zinc-200">
                                 {{ tournament.match_mode }}
+                            </span>
+                        </div>
+
+                        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                            <span
+                                class="inline-flex rounded-full px-2.5 py-1"
+                                :class="{
+                                    'bg-sky-500/15 text-sky-200': realtimeStatus === 'connected',
+                                    'bg-emerald-500/15 text-emerald-200': realtimeStatus === 'updated',
+                                    'bg-yellow-500/15 text-yellow-200': realtimeStatus === 'connecting',
+                                    'bg-red-500/15 text-red-200': realtimeStatus === 'error',
+                                }"
+                            >
+                                Realtime:
+                                <template v-if="realtimeStatus === 'connecting'">
+                                    povezivanje
+                                </template>
+
+                                <template v-else-if="realtimeStatus === 'connected'">
+                                    aktivan
+                                </template>
+
+                                <template v-else-if="realtimeStatus === 'updated'">
+                                    osveženo
+                                </template>
+
+                                <template v-else>
+                                    greška
+                                </template>
+                            </span>
+
+                            <span v-if="lastRealtimeUpdateAt">
+                                Poslednja promena: {{ lastRealtimeUpdateAt }}
                             </span>
                         </div>
                     </div>
