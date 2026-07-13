@@ -19,6 +19,8 @@ use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
+use App\Events\TournamentLiveUpdated;
+
 class TournamentStandingsController extends Controller
 {
     public function index(
@@ -143,6 +145,8 @@ class TournamentStandingsController extends Controller
             }
         });
 
+        event(new TournamentLiveUpdated($tournament->fresh(), 'participant_withdrawn'));
+
         return back()->with('success', 'Učesnik je označen kao odustao, a njegovi grupni mečevi su anulirani.');
     }
 
@@ -222,6 +226,8 @@ class TournamentStandingsController extends Controller
                 ]);
             }
         });
+
+        event(new TournamentLiveUpdated($tournament->fresh(), 'participant_restored'));
 
         return back()->with('success', 'Učesnik je vraćen u aktivne, a njegovi grupni mečevi su vraćeni.');
     }

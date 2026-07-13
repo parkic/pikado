@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 type Venue = {
     name: string;
@@ -65,11 +66,56 @@ type KnockoutRound = {
     series: KnockoutSeries[];
 };
 
-defineProps<{
+const props = defineProps<{
     venue: Venue;
     tournament: Tournament;
     rounds: KnockoutRound[];
 }>();
+
+const realtimeStatus = ref<'connecting' | 'connected' | 'updated' | 'error'>('connecting');
+const lastRealtimeUpdateAt = ref<string | null>(null);
+
+const formatRealtimeTime = (): string => {
+    return new Date().toLocaleTimeString('sr-RS', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+};
+
+const reloadKnockoutData = () => {
+    realtimeStatus.value = 'updated';
+    lastRealtimeUpdateAt.value = formatRealtimeTime();
+
+    router.reload({
+        preserveScroll: true,
+        preserveState: true,
+    });
+};
+
+onMounted(() => {
+    if (!window.Echo) {
+        realtimeStatus.value = 'error';
+
+        return;
+    }
+
+    realtimeStatus.value = 'connected';
+
+    window.Echo
+        .channel(`public-tournament.${props.tournament.public_code}`)
+        .listen('.TournamentLiveUpdated', () => {
+            reloadKnockoutData();
+        });
+});
+
+onBeforeUnmount(() => {
+    if (!window.Echo) {
+        return;
+    }
+
+    window.Echo.leave(`public-tournament.${props.tournament.public_code}`);
+});
 
 const seriesStatusClasses = (status: string): string => {
     if (status === 'finished') {
@@ -135,6 +181,39 @@ const walkoverLabel = (reason: string | null): string | null => {
                         <p class="mt-3 max-w-3xl text-zinc-400">
                             {{ tournament.name }} · {{ tournament.status_label }}
                         </p>
+
+                        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                            <span
+                                class="inline-flex rounded-full px-2.5 py-1"
+                                :class="{
+                                    'bg-sky-500/15 text-sky-200': realtimeStatus === 'connected',
+                                    'bg-emerald-500/15 text-emerald-200': realtimeStatus === 'updated',
+                                    'bg-yellow-500/15 text-yellow-200': realtimeStatus === 'connecting',
+                                    'bg-red-500/15 text-red-200': realtimeStatus === 'error',
+                                }"
+                            >
+                                Realtime:
+                                <template v-if="realtimeStatus === 'connecting'">
+                                    povezivanje
+                                </template>
+
+                                <template v-else-if="realtimeStatus === 'connected'">
+                                    aktivan
+                                </template>
+
+                                <template v-else-if="realtimeStatus === 'updated'">
+                                    osveženo
+                                </template>
+
+                                <template v-else>
+                                    greška
+                                </template>
+                            </span>
+
+                            <span v-if="lastRealtimeUpdateAt">
+                                Poslednja promena: {{ lastRealtimeUpdateAt }}
+                            </span>
+                        </div>
                     </div>
 
                     <nav class="flex flex-wrap gap-2">
