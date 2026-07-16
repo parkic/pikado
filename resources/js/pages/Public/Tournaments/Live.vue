@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { Head, Link } from '@inertiajs/vue3';
+import { usePublicTournamentRealtime } from '@/composables/usePublicTournamentRealtime';
 
 type Venue = {
     name: string;
@@ -77,56 +77,15 @@ const props = defineProps<{
     podium: TournamentPodium;
 }>();
 
-const realtimeStatus = ref<'connecting' | 'connected' | 'updated' | 'error'>('connecting');
-const lastRealtimeUpdateAt = ref<string | null>(null);
-
-const formatRealtimeTime = (): string => {
-    return new Date().toLocaleTimeString('sr-RS', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-    });
-};
-
-const reloadLiveData = () => {
-    realtimeStatus.value = 'updated';
-    lastRealtimeUpdateAt.value = formatRealtimeTime();
-
-    router.reload({
-        only: [
-            'tournament',
-            'active_matches',
-            'next_matches',
-            'recent_matches',
-            'podium',
-        ],
-        preserveScroll: true,
-        preserveState: true,
-    });
-};
-
-onMounted(() => {
-    if (!window.Echo) {
-        realtimeStatus.value = 'error';
-
-        return;
-    }
-
-    realtimeStatus.value = 'connected';
-
-    window.Echo
-        .channel(`public-tournament.${props.tournament.public_code}`)
-        .listen('.TournamentLiveUpdated', () => {
-            reloadLiveData();
-        });
-});
-
-onBeforeUnmount(() => {
-    if (!window.Echo) {
-        return;
-    }
-
-    window.Echo.leave(`public-tournament.${props.tournament.public_code}`);
+const { realtimeStatus, lastRealtimeUpdateAt } = usePublicTournamentRealtime({
+    publicCode: props.tournament.public_code,
+    only: [
+        'tournament',
+        'active_matches',
+        'next_matches',
+        'recent_matches',
+        'podium',
+    ],
 });
 
 const matchContextLabel = (match: PublicMatch): string => {
