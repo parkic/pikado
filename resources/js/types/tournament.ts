@@ -344,3 +344,78 @@ export type TournamentRepechageParticipant = {
     repechage_outcome_status: string | null;
     repechage_outcome_label: string;
 };
+
+
+export type TournamentKnockoutData = TournamentIdentity & {
+    status: TournamentStatus;
+    status_label: string;
+    knockout_size: number | null;
+    knockout_participants_count: number;
+    direct_qualifiers_count: number;
+    repechage_qualifiers_count: number;
+    is_knockout_ready: boolean;
+    knockout_matches_count: number;
+    can_generate_knockout_bracket: boolean;
+};
+
+export type TournamentKnockoutParticipant = {
+    seed: number;
+    participant_id: number;
+    group_name: string;
+    group_position: string | null;
+    group_rank: number;
+    display_name: string;
+    played: number;
+    wins: number;
+    losses: number;
+    points_for: number;
+    points_against: number;
+    points_difference: number;
+    standing_points: number;
+    source: string;
+    source_label: string;
+};
+
+export type TournamentKnockoutSeriesParticipant = {
+    id: number;
+    display_name: string;
+    group_position: string | null;
+    status: string;
+    is_withdrawn: boolean;
+};
+
+export type TournamentKnockoutLeg = {
+    id: number;
+    leg: number;
+    status: string;
+    status_label: string;
+    score: string | null;
+    winner: TournamentKnockoutSeriesParticipant | null;
+    resource_name: string | null;
+};
+
+export type TournamentKnockoutSeries = {
+    round_key: string;
+    round_label: string;
+    round_sort: number;
+    position: number;
+    title: string;
+    wins_required: number;
+    max_legs: number;
+    participant_a: TournamentKnockoutSeriesParticipant | null;
+    participant_b: TournamentKnockoutSeriesParticipant | null;
+    participant_a_wins: number;
+    participant_b_wins: number;
+    series_score: string;
+    winner: TournamentKnockoutSeriesParticipant | null;
+    status: string;
+    status_label: string;
+    legs: TournamentKnockoutLeg[];
+};
+
+export type TournamentKnockoutRound = {
+    round_key: string;
+    round_label: string;
+    round_sort: number;
+    series: TournamentKnockoutSeries[];
+};

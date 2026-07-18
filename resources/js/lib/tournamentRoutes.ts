@@ -50,6 +50,12 @@ export const tournamentRoutes = (
         completeRepechage: `${base}/repechage/complete`,
 
         knockout: `${base}/knockout`,
+        generateKnockoutBracket: `${base}/knockout/generate`,
+        knockoutMatchWalkover: (
+            matchId: number,
+            participantId: number,
+        ) =>
+            `${base}/knockout/matches/${matchId}/participants/${participantId}/walkover`,
     };
 };
 

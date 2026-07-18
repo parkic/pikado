@@ -1,96 +1,29 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 
-type Venue = {
-    id: number;
-    name: string;
-    slug: string;
-};
+import PageHeader from '@/components/shared/PageHeader.vue';
+import TournamentKnockoutOverview from '@/components/tournaments/TournamentKnockoutOverview.vue';
+import TournamentKnockoutParticipants from '@/components/tournaments/TournamentKnockoutParticipants.vue';
+import TournamentKnockoutSeriesList from '@/components/tournaments/TournamentKnockoutSeriesList.vue';
 
-type Tournament = {
-    id: number;
-    name: string;
-    slug: string;
-    status: string;
-    status_label: string;
-    knockout_size: number | null;
-    knockout_participants_count: number;
-    direct_qualifiers_count: number;
-    repechage_qualifiers_count: number;
-    is_knockout_ready: boolean;
-    knockout_matches_count: number;
-    can_generate_knockout_bracket: boolean;
-};
+import { useTournamentKnockoutActions } from '@/composables/useTournamentKnockoutActions';
+import { tournamentRoutes } from '@/lib/tournamentRoutes';
 
-type KnockoutParticipant = {
-    seed: number;
-    participant_id: number;
-    group_name: string;
-    group_position: string | null;
-    group_rank: number;
-    display_name: string;
-    played: number;
-    wins: number;
-    losses: number;
-    points_for: number;
-    points_against: number;
-    points_difference: number;
-    standing_points: number;
-    source: string;
-    source_label: string;
-};
+import type {
+    TournamentKnockoutData,
+    TournamentKnockoutParticipant,
+    TournamentKnockoutRound,
+} from '@/types/tournament';
 
-type SeriesParticipant = {
-    id: number;
-    display_name: string;
-    group_position: string | null;
-    status: string;
-    is_withdrawn: boolean;
-} | null;
-
-type KnockoutLeg = {
-    id: number;
-    leg: number;
-    status: string;
-    status_label: string;
-    score: string | null;
-    winner: SeriesParticipant;
-    resource_name: string | null;
-};
-
-type KnockoutSeries = {
-    round_key: string;
-    round_label: string;
-    round_sort: number;
-    position: number;
-    title: string;
-    wins_required: number;
-    max_legs: number;
-    participant_a: SeriesParticipant;
-    participant_b: SeriesParticipant;
-    participant_a_wins: number;
-    participant_b_wins: number;
-    series_score: string;
-    winner: SeriesParticipant;
-    status: string;
-    status_label: string;
-    legs: KnockoutLeg[];
-};
-
-type KnockoutRound = {
-    round_key: string;
-    round_label: string;
-    round_sort: number;
-    series: KnockoutSeries[];
-};
+import type { VenueSummary } from '@/types/venue';
 
 const props = defineProps<{
-    venue: Venue;
-    tournament: Tournament;
-    direct_qualifiers: KnockoutParticipant[];
-    repechage_qualifiers: KnockoutParticipant[];
-    knockout_participants: KnockoutParticipant[];
-    knockout_series: KnockoutRound[];
+    venue: VenueSummary;
+    tournament: TournamentKnockoutData;
+    direct_qualifiers: TournamentKnockoutParticipant[];
+    repechage_qualifiers: TournamentKnockoutParticipant[];
+    knockout_participants: TournamentKnockoutParticipant[];
+    knockout_series: TournamentKnockoutRound[];
 }>();
 
 defineOptions({
@@ -104,123 +37,34 @@ defineOptions({
     },
 });
 
-const sourceBadgeClasses = (source: string): string => {
-    if (source === 'direct') {
-        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-    }
+const routes = tournamentRoutes(
+    props.venue.slug,
+    props.tournament.slug,
+);
 
-    return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300';
-};
-
-const differenceLabel = (difference: number): string => {
-    if (difference > 0) {
-        return `+${difference}`;
-    }
-
-    return String(difference);
-};
-
-const seriesStatusClasses = (status: string): string => {
-    if (status === 'finished') {
-        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-    }
-
-    if (status === 'in_progress') {
-        return 'bg-primary/10 text-primary';
-    }
-
-    if (status === 'waiting_participants') {
-        return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300';
-    }
-
-    return 'bg-muted text-muted-foreground';
-};
-
-const legStatusClasses = (status: string): string => {
-    if (status === 'finished') {
-        return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-    }
-
-    if (status === 'voided') {
-        return 'bg-muted text-muted-foreground';
-    }
-
-    if (status === 'in_progress') {
-        return 'bg-primary/10 text-primary';
-    }
-
-    return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300';
-};
-
-const generateKnockoutBracket = () => {
-    const confirmed = window.confirm('Da li želiš da generišeš nokaut kostur?');
-
-    if (!confirmed) {
-        return;
-    }
-
-    router.post(`/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/knockout/generate`);
-};
-
-const canApplyWalkover = (series: KnockoutSeries): boolean => {
-    return props.tournament.status === 'knockout_stage'
-        && !series.winner
-        && !!series.participant_a
-        && !!series.participant_b
-        && series.legs.length > 0;
-};
-
-const applyKnockoutWalkover = (
-    series: KnockoutSeries,
-    participant: NonNullable<SeriesParticipant>,
-) => {
-    const firstLeg = series.legs[0];
-
-    if (!firstLeg) {
-        window.alert('Serija nema partije.');
-
-        return;
-    }
-
-    const confirmed = window.confirm(
-        `Da li želiš da označiš da je "${participant.display_name}" odustao? Protivnik automatski dobija seriju.`,
-    );
-
-    if (!confirmed) {
-        return;
-    }
-
-    router.patch(
-        `/venues/${props.venue.slug}/tournaments/${props.tournament.slug}/knockout/matches/${firstLeg.id}/participants/${participant.id}/walkover`,
-        {},
-        {
-            preserveScroll: true,
-            preserveState: false,
-        },
-    );
-};
+const {
+    generateKnockoutBracket,
+    canApplyWalkover,
+    applyKnockoutWalkover,
+} = useTournamentKnockoutActions({
+    tournamentStatus: () => props.tournament.status,
+    generateBracketUrl:
+        routes.generateKnockoutBracket,
+    matchWalkoverUrl:
+        routes.knockoutMatchWalkover,
+});
 </script>
 
 <template>
     <Head :title="`Nokaut - ${tournament.name}`" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
-        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-                <p class="text-sm text-muted-foreground">
-                    {{ venue.name }}
-                </p>
-
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight">
-                    Nokaut žreb
-                </h1>
-
-                <p class="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Pregled učesnika koji ulaze u nokaut za turnir: {{ tournament.name }}.
-                </p>
-            </div>
-
-            <div class="flex flex-col gap-2 sm:flex-row">
+        <PageHeader
+            :eyebrow="venue.name"
+            title="Nokaut žreb"
+            :description="`Pregled učesnika koji ulaze u nokaut za turnir: ${tournament.name}.`"
+        >
+            <template #actions>
                 <button
                     v-if="tournament.can_generate_knockout_bracket"
                     type="button"
@@ -231,405 +75,45 @@ const applyKnockoutWalkover = (
                 </button>
 
                 <Link
-                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/repechage`"
+                    :href="routes.repechage"
                     class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
                 >
                     Repasaž
                 </Link>
 
                 <Link
-                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/standings`"
+                    :href="routes.standings"
                     class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
                 >
                     Tabela
                 </Link>
 
                 <Link
-                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}`"
+                    :href="routes.show"
                     class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
                 >
                     Nazad na turnir
                 </Link>
-            </div>
-        </div>
+            </template>
+        </PageHeader>
 
-        <div class="grid gap-4 md:grid-cols-5">
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-                <p class="text-sm text-muted-foreground">
-                    Veličina nokauta
-                </p>
+        <TournamentKnockoutOverview
+            :tournament="tournament"
+            :schedule-url="routes.schedule"
+            @generate="generateKnockoutBracket"
+        />
 
-                <p class="mt-2 text-2xl font-semibold">
-                    {{ tournament.knockout_size ?? '-' }}
-                </p>
-            </div>
-
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-                <p class="text-sm text-muted-foreground">
-                    Učesnika za nokaut
-                </p>
-
-                <p class="mt-2 text-2xl font-semibold">
-                    {{ tournament.knockout_participants_count }}
-                </p>
-            </div>
-
-            <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300">
-                <p class="text-sm">
-                    Direktno
-                </p>
-
-                <p class="mt-2 text-2xl font-semibold">
-                    {{ tournament.direct_qualifiers_count }}
-                </p>
-            </div>
-
-            <div class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300">
-                <p class="text-sm">
-                    Iz repasaža
-                </p>
-
-                <p class="mt-2 text-2xl font-semibold">
-                    {{ tournament.repechage_qualifiers_count }}
-                </p>
-            </div>
-        </div>
-
-        <div
-            v-if="tournament.is_knockout_ready"
-            class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
-        >
-            <h2 class="text-lg font-medium">
-                Nokaut je spreman
-            </h2>
-
-            <p class="mt-1 text-sm">
-                Broj učesnika se poklapa sa veličinom nokauta. Sledeći korak je generisanje nokaut kostura.
-            </p>
-
-            <button
-                v-if="tournament.can_generate_knockout_bracket"
-                type="button"
-                class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-                @click="generateKnockoutBracket"
-            >
-                Generiši kostur
-            </button>
-
-            <Link
-                v-else-if="tournament.knockout_matches_count > 0"
-                :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/schedule`"
-                class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-            >
-                Otvori raspored
-            </Link>
-        </div>
-
-        <div
-            v-else
-            class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
-        >
-            <h2 class="text-lg font-medium">
-                Nokaut još nije spreman
-            </h2>
-
-            <p class="mt-1 text-sm">
-                Potrebno je da broj učesnika za nokaut bude tačno {{ tournament.knockout_size ?? '-' }}.
-                Trenutno ih ima {{ tournament.knockout_participants_count }}.
-            </p>
-        </div>
-
-        <div
+        <TournamentKnockoutSeriesList
             v-if="knockout_series.length"
-            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
-        >
-            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                    <h2 class="text-lg font-medium">
-                        Nokaut serije
-                    </h2>
+            :rounds="knockout_series"
+            :schedule-url="routes.schedule"
+            :can-apply-walkover="canApplyWalkover"
+            @apply-walkover="applyKnockoutWalkover"
+        />
 
-                    <p class="mt-1 text-sm text-muted-foreground">
-                        Pregled nokaut duela po rundama. Rezultati se i dalje unose kroz raspored, a ovde se vidi stanje cele serije.
-                    </p>
-                </div>
-
-                <Link
-                    :href="`/venues/${venue.slug}/tournaments/${tournament.slug}/schedule`"
-                    class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-                >
-                    Unesi rezultate
-                </Link>
-            </div>
-
-            <div class="mt-6 space-y-8">
-                <section
-                    v-for="round in knockout_series"
-                    :key="round.round_key"
-                >
-                    <div class="mb-3 flex items-center justify-between gap-4">
-                        <h3 class="text-base font-semibold">
-                            {{ round.round_label }}
-                        </h3>
-
-                        <span class="text-sm text-muted-foreground">
-                            {{ round.series.length }} serija
-                        </span>
-                    </div>
-
-                    <div class="grid gap-4 xl:grid-cols-2">
-                        <article
-                            v-for="series in round.series"
-                            :key="`${series.round_key}-${series.position}`"
-                            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
-                        >
-                            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div>
-                                    <h4 class="font-medium">
-                                        {{ series.title }}
-                                    </h4>
-
-                                    <p class="mt-1 text-sm text-muted-foreground">
-                                        Na {{ series.wins_required }} dobijene · maksimalno {{ series.max_legs }} partija
-                                    </p>
-                                </div>
-
-                                <span
-                                    class="inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium"
-                                    :class="seriesStatusClasses(series.status)"
-                                >
-                                    {{ series.status_label }}
-                                </span>
-                            </div>
-
-                            <div class="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-lg bg-muted/40 p-3">
-                                <div>
-                                    <p
-                                        class="font-medium"
-                                        :class="series.participant_a?.is_withdrawn ? 'text-muted-foreground line-through' : ''"
-                                    >
-                                        {{ series.participant_a?.display_name ?? 'Čeka učesnika' }}
-                                    </p>
-
-                                    <span
-                                        v-if="series.participant_a?.is_withdrawn"
-                                        class="mt-1 inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
-                                    >
-                                        Odustao
-                                    </span>
-
-                                    <p
-                                        v-if="series.participant_a?.group_position"
-                                        class="mt-1 text-xs text-muted-foreground"
-                                    >
-                                        {{ series.participant_a.group_position }}
-                                    </p>
-                                </div>
-
-                                <div class="rounded-lg bg-background px-3 py-2 text-center text-xl font-semibold">
-                                    {{ series.series_score }}
-                                </div>
-
-                                <div class="text-right">
-                                    <p
-                                        class="font-medium"
-                                        :class="series.participant_b?.is_withdrawn ? 'text-muted-foreground line-through' : ''"
-                                    >
-                                        {{ series.participant_b?.display_name ?? 'Čeka učesnika' }}
-                                    </p>
-
-                                    <span
-                                        v-if="series.participant_b?.is_withdrawn"
-                                        class="mt-1 inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
-                                    >
-                                        Odustao
-                                    </span>
-
-                                    <p
-                                        v-if="series.participant_b?.group_position"
-                                        class="mt-1 text-xs text-muted-foreground"
-                                    >
-                                        {{ series.participant_b.group_position }}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div
-                                v-if="canApplyWalkover(series)"
-                                class="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3"
-                            >
-                                <p class="text-xs font-medium text-red-700 dark:text-red-300">
-                                    Walkover / odustajanje
-                                </p>
-
-                                <div class="mt-2 flex flex-col gap-2 sm:flex-row">
-                                    <button
-                                        v-if="series.participant_a"
-                                        type="button"
-                                        class="inline-flex items-center justify-center rounded-lg border border-red-500/30 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
-                                        @click="applyKnockoutWalkover(series, series.participant_a)"
-                                    >
-                                        {{ series.participant_a.display_name }} odustao
-                                    </button>
-
-                                    <button
-                                        v-if="series.participant_b"
-                                        type="button"
-                                        class="inline-flex items-center justify-center rounded-lg border border-red-500/30 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
-                                        @click="applyKnockoutWalkover(series, series.participant_b)"
-                                    >
-                                        {{ series.participant_b.display_name }} odustao
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="mt-4 overflow-hidden rounded-lg border border-sidebar-border/70 dark:border-sidebar-border">
-                                <table class="w-full text-left text-sm">
-                                    <thead class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border">
-                                        <tr>
-                                            <th class="px-3 py-2 font-medium">Partija</th>
-                                            <th class="px-3 py-2 text-center font-medium">Status</th>
-                                            <th class="px-3 py-2 text-center font-medium">Rezultat</th>
-                                            <th class="px-3 py-2 font-medium">Pobednik</th>
-                                            <th class="px-3 py-2 font-medium">Resource</th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody>
-                                        <tr
-                                            v-for="leg in series.legs"
-                                            :key="leg.id"
-                                            class="border-b border-sidebar-border/70 last:border-b-0 dark:border-sidebar-border"
-                                        >
-                                            <td class="px-3 py-2 text-muted-foreground">
-                                                Leg {{ leg.leg }}
-                                            </td>
-
-                                            <td class="px-3 py-2 text-center">
-                                                <span
-                                                    class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-                                                    :class="legStatusClasses(leg.status)"
-                                                >
-                                                    {{ leg.status_label }}
-                                                </span>
-                                            </td>
-
-                                            <td class="px-3 py-2 text-center font-medium">
-                                                {{ leg.score ?? '-' }}
-                                            </td>
-
-                                            <td class="px-3 py-2">
-                                                {{ leg.winner?.display_name ?? '-' }}
-                                            </td>
-
-                                            <td class="px-3 py-2 text-muted-foreground">
-                                                {{ leg.resource_name ?? '-' }}
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </article>
-                    </div>
-                </section>
-            </div>
-        </div>
-
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-            <div>
-                <h2 class="text-lg font-medium">
-                    Učesnici za nokaut
-                </h2>
-
-                <p class="mt-1 text-sm text-muted-foreground">
-                    Lista učesnika koji ulaze u nokaut. Kostur još nije generisan.
-                </p>
-            </div>
-
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-                <p class="text-sm text-muted-foreground">
-                    Nokaut mečevi
-                </p>
-
-                <p class="mt-2 text-2xl font-semibold">
-                    {{ tournament.knockout_matches_count }}
-                </p>
-            </div>
-
-            <div
-                v-if="knockout_participants.length"
-                class="mt-4 overflow-hidden rounded-lg border border-sidebar-border/70 dark:border-sidebar-border"
-            >
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border">
-                            <tr>
-                                <th class="px-3 py-3 font-medium">Seed</th>
-                                <th class="px-3 py-3 font-medium">Učesnik</th>
-                                <th class="px-3 py-3 text-center font-medium">Grupa</th>
-                                <th class="px-3 py-3 text-center font-medium">Izvor</th>
-                                <th class="px-3 py-3 text-center font-medium">P</th>
-                                <th class="px-3 py-3 text-center font-medium">+/-</th>
-                                <th class="px-3 py-3 text-center font-medium">Bod</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            <tr
-                                v-for="participant in knockout_participants"
-                                :key="participant.participant_id"
-                                class="border-b border-sidebar-border/70 last:border-b-0 dark:border-sidebar-border"
-                            >
-                                <td class="px-3 py-3 text-muted-foreground">
-                                    {{ participant.seed }}
-                                </td>
-
-                                <td class="px-3 py-3">
-                                    <div class="font-medium">
-                                        {{ participant.display_name }}
-                                    </div>
-
-                                    <div class="mt-1 text-xs text-muted-foreground">
-                                        {{ participant.group_position ?? '-' }}
-                                    </div>
-                                </td>
-
-                                <td class="px-3 py-3 text-center text-muted-foreground">
-                                    {{ participant.group_name }} / {{ participant.group_rank }}.
-                                </td>
-
-                                <td class="px-3 py-3 text-center">
-                                    <span
-                                        class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-                                        :class="sourceBadgeClasses(participant.source)"
-                                    >
-                                        {{ participant.source_label }}
-                                    </span>
-                                </td>
-
-                                <td class="px-3 py-3 text-center text-muted-foreground">
-                                    {{ participant.wins }}
-                                </td>
-
-                                <td class="px-3 py-3 text-center font-medium">
-                                    {{ differenceLabel(participant.points_difference) }}
-                                </td>
-
-                                <td class="px-3 py-3 text-center font-semibold">
-                                    {{ participant.standing_points }}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div
-                v-else
-                class="mt-4 rounded-lg border border-dashed border-sidebar-border/70 p-4 text-sm text-muted-foreground dark:border-sidebar-border"
-            >
-                Još nema učesnika za nokaut.
-            </div>
-        </div>
+        <TournamentKnockoutParticipants
+            :participants="knockout_participants"
+            :matches-count="tournament.knockout_matches_count"
+        />
     </div>
 </template>
