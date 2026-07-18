@@ -43,7 +43,12 @@ export const tournamentRoutes = (
             `${base}/standings/participants/${participantId}/restore`,
 
         qualificationSetup: `${base}/qualification/setup`,
+
         repechage: `${base}/repechage`,
+        repechageParticipantOutcome: (participantId: number) =>
+            `${base}/repechage/participants/${participantId}/outcome`,
+        completeRepechage: `${base}/repechage/complete`,
+
         knockout: `${base}/knockout`,
     };
 };

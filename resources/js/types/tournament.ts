@@ -317,3 +317,30 @@ export type TournamentStandingGroup = {
     finished_matches_count: number;
     rows: TournamentStandingRow[];
 };
+
+export type TournamentRepechageData = TournamentIdentity & {
+    status: TournamentStatus;
+    status_label: string;
+    settings: TournamentSettings;
+    repechage_qualifiers_count: number;
+    repechage_advanced_count: number;
+    repechage_eliminated_count: number;
+    can_complete_repechage: boolean;
+};
+
+export type TournamentRepechageParticipant = {
+    participant_id: number;
+    group_name: string;
+    group_position: string | null;
+    group_rank: number;
+    display_name: string;
+    played: number;
+    wins: number;
+    losses: number;
+    points_for: number;
+    points_against: number;
+    points_difference: number;
+    standing_points: number;
+    repechage_outcome_status: string | null;
+    repechage_outcome_label: string;
+};
