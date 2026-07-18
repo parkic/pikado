@@ -29,7 +29,12 @@ export const tournamentRoutes = (
         completeGroupStage: `${base}/complete-group-stage`,
 
         schedule: `${base}/schedule`,
+        scheduleMatchResource: (matchId: number) =>
+            `${base}/schedule/matches/${matchId}/resource`,
+        scheduleMatchResult: (matchId: number) =>
+            `${base}/schedule/matches/${matchId}/result`,
         standings: `${base}/standings`,
+
         qualificationSetup: `${base}/qualification/setup`,
         repechage: `${base}/repechage`,
         knockout: `${base}/knockout`,

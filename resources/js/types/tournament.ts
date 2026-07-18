@@ -221,3 +221,63 @@ export type TournamentGroupDrawFormData = {
     */
     slot?: string;
 };
+
+export type TournamentScheduleData = TournamentIdentity & {
+    status: TournamentStatus;
+    status_label: string;
+    matches_count: number;
+    group_matches_count: number;
+};
+
+export type TournamentScheduleParticipant = {
+    id: number;
+    group_position: string | null;
+    display_name: string;
+    status: string;
+    is_withdrawn: boolean;
+};
+
+export type TournamentScheduleMatchResource = {
+    id: number;
+    name: string;
+    type: string;
+};
+
+export type TournamentScheduleAvailableResource = {
+    id: number;
+    name: string;
+    type: string;
+    type_label: string;
+};
+
+export type TournamentScheduleWinner = {
+    id: number;
+    display_name: string;
+};
+
+export type TournamentScheduleMatch = {
+    id: number;
+    stage: string;
+    stage_label: string;
+    group_name: string | null;
+    scheduled_order: number | null;
+    round_robin_leg: number | null;
+    wins_required: number | null;
+    bracket_round: string | null;
+    bracket_round_label: string | null;
+    bracket_position: number | null;
+    participant_a: TournamentScheduleParticipant | null;
+    participant_b: TournamentScheduleParticipant | null;
+    score_a: number | null;
+    score_b: number | null;
+    winner: TournamentScheduleWinner | null;
+    status: string;
+    status_label: string;
+    resource: TournamentScheduleMatchResource | null;
+};
+
+export type TournamentScheduleResultForm = {
+    score_a: string;
+    score_b: string;
+    winner_participant_id: string;
+};
