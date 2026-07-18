@@ -6,11 +6,15 @@ use App\Enums\MatchMode;
 use App\Enums\ParticipantStatus;
 use App\Enums\ParticipantType;
 use App\Enums\TournamentStatus;
+use App\Enums\MatchStage;
+use App\Enums\MatchStatus;
+use App\Events\TournamentLiveUpdated;
 
 use App\Models\Player;
 use App\Models\Team;
 use App\Models\Tournament;
 use App\Models\TournamentGroup;
+use App\Models\TournamentMatch;
 use App\Models\TournamentParticipant;
 use App\Models\Venue;
 
@@ -18,6 +22,7 @@ use App\Services\GroupMatchGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 use Inertia\Inertia;
@@ -35,6 +40,11 @@ class TournamentGroupDrawController extends Controller
         $this->loadTournamentForDraw($tournament);
 
         $nextSlot = $this->nextEmptySlot($tournament);
+
+        $replacementMatches = TournamentMatch::withoutGlobalScope('visible_matches')
+            ->where('tournament_id', $tournament->id)
+            ->where('stage', MatchStage::GROUP->value)
+            ->get();
 
         return Inertia::render('Venues/Tournaments/GroupDraw', [
             'venue' => [
@@ -63,12 +73,17 @@ class TournamentGroupDrawController extends Controller
                     'id' => $group->id,
                     'name' => $group->name,
                     'sort_order' => $group->sort_order,
-                    'participants' => $group->participants->map(fn(TournamentParticipant $participant) => [
+                    'participants' => $group->participants->map(fn (TournamentParticipant $participant) => [
                         'id' => $participant->id,
                         'participant_type' => $participant->participant_type->value,
                         'group_position' => $participant->group_position,
                         'status' => $participant->status->value,
                         'display_name' => $this->participantDisplayName($participant),
+                        'can_replace' => $this->participantReplacementValidationError(
+                            $tournament,
+                            $participant,
+                            $replacementMatches,
+                        ) === null,
                     ]),
                 ]),
             ],
@@ -301,6 +316,161 @@ class TournamentGroupDrawController extends Controller
                 ] : null,
             ],
         ]);
+    }
+
+    public function replaceParticipant(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        TournamentParticipant $participant
+    ): Response|RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+        abort_unless($participant->tournament_id === $tournament->id, 404);
+
+        $replacementError = $this->participantReplacementValidationError(
+            $tournament,
+            $participant,
+        );
+
+        if ($replacementError !== null) {
+            return redirect()
+                ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
+                ->withErrors(['participant' => $replacementError]);
+        }
+
+        $participant->load(['player', 'team']);
+
+        return Inertia::render('Venues/Tournaments/ReplaceGroupDrawParticipant', [
+            'venue' => [
+                'id' => $venue->id,
+                'name' => $venue->name,
+                'slug' => $venue->slug,
+            ],
+            'tournament' => [
+                'id' => $tournament->id,
+                'name' => $tournament->name,
+                'slug' => $tournament->slug,
+                'status' => $tournament->status->value,
+                'match_mode' => $tournament->match_mode->value,
+                'match_mode_label' => $tournament->match_mode === MatchMode::SINGLES ? '1v1' : '2v2',
+            ],
+            'participant' => [
+                'id' => $participant->id,
+                'participant_type' => $participant->participant_type->value,
+                'group_position' => $participant->group_position,
+                'status' => $participant->status->value,
+                'display_name' => $this->participantDisplayName($participant),
+            ],
+            'available_players' => $this->availablePlayers($venue, $tournament),
+            'available_teams' => $this->availableTeams($venue, $tournament),
+        ]);
+    }
+
+    public function updateParticipantReplacement(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        TournamentParticipant $participant
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+        abort_unless($participant->tournament_id === $tournament->id, 404);
+
+        $replacementError = $this->participantReplacementValidationError(
+            $tournament,
+            $participant,
+        );
+
+        if ($replacementError !== null) {
+            return back()->withErrors([
+                'participant' => $replacementError,
+            ]);
+        }
+
+        if ($tournament->match_mode === MatchMode::SINGLES) {
+            $validated = $request->validate([
+                'existing_player_id' => ['nullable', 'integer'],
+                'first_name' => ['required_without:existing_player_id', 'nullable', 'string', 'max:255'],
+                'last_name' => ['required_without:existing_player_id', 'nullable', 'string', 'max:255'],
+                'nickname' => ['nullable', 'string', 'max:255'],
+            ]);
+
+            $replacementPlayer = $this->resolveReplacementPlayer(
+                $venue,
+                $tournament,
+                $participant,
+                $validated,
+            );
+
+            DB::transaction(function () use (
+                $tournament,
+                $participant,
+                $replacementPlayer
+            ): void {
+                $this->restoreMatchesVoidedByParticipant($tournament, $participant);
+
+                $participant->update([
+                    'participant_type' => ParticipantType::PLAYER,
+                    'player_id' => $replacementPlayer->id,
+                    'team_id' => null,
+                    'status' => ParticipantStatus::ACTIVE,
+                    'withdrawn_at' => null,
+                    'withdrawn_stage' => null,
+                    'withdrawn_reason' => null,
+                    'qualification_override_status' => null,
+                    'repechage_outcome_status' => null,
+                ]);
+            });
+        } else {
+            $validated = $request->validate([
+                'existing_team_id' => ['nullable', 'integer'],
+                'team_name' => ['required_without:existing_team_id', 'nullable', 'string', 'max:255'],
+            ]);
+
+            $replacementTeam = $this->resolveReplacementTeam(
+                $venue,
+                $tournament,
+                $participant,
+                $validated,
+            );
+
+            DB::transaction(function () use (
+                $tournament,
+                $participant,
+                $replacementTeam
+            ): void {
+                $this->restoreMatchesVoidedByParticipant($tournament, $participant);
+
+                $participant->update([
+                    'participant_type' => ParticipantType::TEAM,
+                    'player_id' => null,
+                    'team_id' => $replacementTeam->id,
+                    'status' => ParticipantStatus::ACTIVE,
+                    'withdrawn_at' => null,
+                    'withdrawn_stage' => null,
+                    'withdrawn_reason' => null,
+                    'qualification_override_status' => null,
+                    'repechage_outcome_status' => null,
+                ]);
+            });
+        }
+
+        event(new TournamentLiveUpdated(
+            $tournament->fresh(),
+            'participant_replaced',
+        ));
+
+        return redirect()
+            ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
+            ->with(
+                'success',
+                'Učesnik u slotu ' . $participant->group_position . ' je uspešno zamenjen.',
+            );
     }
 
     public function updateParticipant(
@@ -732,5 +902,218 @@ class TournamentGroupDrawController extends Controller
         $tournament->update([
             'status' => $nextStatus,
         ]);
+    }
+
+    private function participantReplacementValidationError(
+        Tournament $tournament,
+        TournamentParticipant $participant,
+        ?Collection $matches = null
+    ): ?string {
+        if (! in_array($tournament->status, [
+            TournamentStatus::DRAFT,
+            TournamentStatus::GROUP_DRAW,
+            TournamentStatus::READY,
+            TournamentStatus::GROUP_STAGE,
+        ], true)) {
+            return 'Učesnik više ne može da se zameni u trenutnoj fazi turnira.';
+        }
+
+        if (! $participant->tournament_group_id || ! $participant->group_position) {
+            return 'Učesnik nema validnu grupu ili slot.';
+        }
+
+        $matches ??= TournamentMatch::withoutGlobalScope('visible_matches')
+            ->where('tournament_id', $tournament->id)
+            ->where('stage', MatchStage::GROUP->value)
+            ->get();
+
+        $participantMatches = $matches->filter(function (TournamentMatch $match) use ($participant): bool {
+            return (int) $match->participant_a_id === $participant->id
+                || (int) $match->participant_b_id === $participant->id;
+        });
+
+        foreach ($participantMatches as $match) {
+            if (in_array($match->status, [
+                MatchStatus::IN_PROGRESS,
+                MatchStatus::FINISHED,
+            ], true)) {
+                return 'Učesnik ne može da se zameni jer je već započeo ili završio grupni meč.';
+            }
+
+            if ($match->score_a !== null || $match->score_b !== null || $match->winner_participant_id !== null) {
+                return 'Učesnik ne može da se zameni jer već ima evidentiran rezultat.';
+            }
+
+            $meta = $match->meta ?? [];
+
+            if (
+                $match->status === MatchStatus::VOIDED
+                && (int) ($meta['voided_by_participant_id'] ?? 0) === $participant->id
+                && in_array($meta['previous_status'] ?? null, [
+                    MatchStatus::IN_PROGRESS->value,
+                    MatchStatus::FINISHED->value,
+                ], true)
+            ) {
+                return 'Učesnik ne može da se zameni jer je pre odustajanja već igrao grupni meč.';
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveReplacementPlayer(
+        Venue $venue,
+        Tournament $tournament,
+        TournamentParticipant $participant,
+        array $validated
+    ): Player {
+        $existingPlayerId = $validated['existing_player_id'] ?? null;
+
+        if ($existingPlayerId) {
+            $player = Player::query()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->findOrFail($existingPlayerId);
+        } else {
+            $firstName = trim((string) ($validated['first_name'] ?? ''));
+            $lastName = trim((string) ($validated['last_name'] ?? ''));
+            $nickname = isset($validated['nickname']) && trim((string) $validated['nickname']) !== ''
+                ? trim((string) $validated['nickname'])
+                : null;
+
+            $playerQuery = Player::query()
+                ->where('venue_id', $venue->id)
+                ->where('first_name', $firstName)
+                ->where('last_name', $lastName);
+
+            $nickname === null
+                ? $playerQuery->whereNull('nickname')
+                : $playerQuery->where('nickname', $nickname);
+
+            $player = $playerQuery->first();
+
+            if (! $player) {
+                $player = Player::create([
+                    'venue_id' => $venue->id,
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
+                    'nickname' => $nickname,
+                    'is_active' => true,
+                ]);
+            }
+        }
+
+        $alreadyUsed = $tournament->participants()
+            ->where('id', '!=', $participant->id)
+            ->where('participant_type', ParticipantType::PLAYER->value)
+            ->where('player_id', $player->id)
+            ->exists();
+
+        if ($alreadyUsed) {
+            throw ValidationException::withMessages([
+                'existing_player_id' => 'Ovaj igrač je već dodat u turnir.',
+                'first_name' => 'Ovaj igrač je već dodat u turnir.',
+            ]);
+        }
+
+        return $player;
+    }
+
+    private function resolveReplacementTeam(
+        Venue $venue,
+        Tournament $tournament,
+        TournamentParticipant $participant,
+        array $validated
+    ): Team {
+        $existingTeamId = $validated['existing_team_id'] ?? null;
+
+        if ($existingTeamId) {
+            $team = Team::query()
+                ->where('venue_id', $venue->id)
+                ->where('is_active', true)
+                ->findOrFail($existingTeamId);
+        } else {
+            $teamName = trim((string) ($validated['team_name'] ?? ''));
+
+            $team = Team::query()
+                ->where('venue_id', $venue->id)
+                ->where('name', $teamName)
+                ->first();
+
+            if (! $team) {
+                $team = Team::create([
+                    'venue_id' => $venue->id,
+                    'name' => $teamName,
+                    'is_active' => true,
+                ]);
+            }
+        }
+
+        $alreadyUsed = $tournament->participants()
+            ->where('id', '!=', $participant->id)
+            ->where('participant_type', ParticipantType::TEAM->value)
+            ->where('team_id', $team->id)
+            ->exists();
+
+        if ($alreadyUsed) {
+            throw ValidationException::withMessages([
+                'existing_team_id' => 'Ova ekipa je već dodata u turnir.',
+                'team_name' => 'Ova ekipa je već dodata u turnir.',
+            ]);
+        }
+
+        return $team;
+    }
+
+    private function restoreMatchesVoidedByParticipant(
+        Tournament $tournament,
+        TournamentParticipant $participant
+    ): void {
+        $matches = TournamentMatch::withoutGlobalScope('visible_matches')
+            ->where('tournament_id', $tournament->id)
+            ->where('stage', MatchStage::GROUP->value)
+            ->where(function ($query) use ($participant): void {
+                $query
+                    ->where('participant_a_id', $participant->id)
+                    ->orWhere('participant_b_id', $participant->id);
+            })
+            ->get();
+
+        foreach ($matches as $match) {
+            if ($match->status !== MatchStatus::VOIDED) {
+                continue;
+            }
+
+            $meta = $match->meta ?? [];
+
+            if (
+                ($meta['voided_reason'] ?? null) !== 'participant_withdrawn'
+                || (int) ($meta['voided_by_participant_id'] ?? 0) !== $participant->id
+            ) {
+                continue;
+            }
+
+            $previousStatus = MatchStatus::tryFrom(
+                (string) ($meta['previous_status'] ?? ''),
+            ) ?? MatchStatus::SCHEDULED;
+
+            $previousFinishedAt = $meta['previous_finished_at'] ?? null;
+
+            unset(
+                $meta['previous_status'],
+                $meta['previous_finished_at'],
+                $meta['voided_reason'],
+                $meta['voided_by_participant_id'],
+                $meta['voided_at'],
+            );
+
+            $match->update([
+                'status' => $previousStatus,
+                'finished_at' => $previousStatus === MatchStatus::FINISHED
+                    ? $previousFinishedAt
+                    : null,
+                'meta' => $meta ?: null,
+            ]);
+        }
     }
 }

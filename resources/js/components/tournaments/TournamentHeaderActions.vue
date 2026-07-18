@@ -59,13 +59,24 @@ const emit = defineEmits<{
         Pregled učesnika
     </Link>
 
-    <Link
+    <div
         v-else-if="status === 'group_stage'"
-        :href="routes.schedule"
-        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+        class="flex flex-col gap-2 sm:flex-row"
     >
-        Otvori raspored
-    </Link>
+        <Link
+            :href="routes.schedule"
+            class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+        >
+            Otvori raspored
+        </Link>
+
+        <Link
+            :href="routes.groupDraw"
+            class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+        >
+            Učesnici
+        </Link>
+    </div>
 
     <Link
         v-else-if="status === 'repechage'"

@@ -57,6 +57,7 @@ export type TournamentGroupParticipant = {
     group_position: string | null;
     status: string;
     display_name: string;
+    can_replace?: boolean;
 };
 
 export type TournamentGroup = {
@@ -228,6 +229,7 @@ export type TournamentGroupDrawFormData = {
      * Nije stvarno polje koje unosimo u formu.
     */
     slot?: string;
+    participant?: string;
 };
 
 export type TournamentScheduleData = TournamentIdentity & {
@@ -456,6 +458,14 @@ export type TournamentEditGroupDrawParticipantFormData = {
     last_name: string;
     nickname: string;
     team_name: string;
+};
+
+export type TournamentReplaceGroupDrawParticipant = {
+    id: number;
+    participant_type: 'player' | 'team';
+    group_position: string | null;
+    status: string;
+    display_name: string;
 };
 
 

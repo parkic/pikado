@@ -58,7 +58,12 @@ const form = useForm<TournamentGroupDrawFormData>({
     group_position: '',
 });
 
-const finishParticipantEntryForm = useForm({});
+type FinishParticipantEntryFormData = {
+    status?: string;
+};
+
+const finishParticipantEntryForm =
+    useForm<FinishParticipantEntryFormData>({});
 
 const {
     groupSize,
@@ -275,6 +280,7 @@ const finishParticipantEntry = () => {
                 :groups="tournament.groups"
                 :group-size="groupSize"
                 :participant-edit-url="routes.groupDrawParticipantEdit"
+                :participant-replace-url="routes.groupDrawParticipantReplace"
                 @select-slot="selectSlot"
                 @remove-participant="removeParticipant"
             />

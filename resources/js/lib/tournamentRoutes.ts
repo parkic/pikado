@@ -29,6 +29,8 @@ export const tournamentRoutes = (
             `${base}/group-draw/participants/${participantId}`,
         groupDrawParticipantEdit: (participantId: number) =>
             `${base}/group-draw/participants/${participantId}/edit`,
+        groupDrawParticipantReplace: (participantId: number) =>
+            `${base}/group-draw/participants/${participantId}/replace`,
         startGroupDraw: `${base}/start-group-draw`,
         markReady: `${base}/mark-ready`,
         generateGroupMatches: `${base}/generate-group-matches`,

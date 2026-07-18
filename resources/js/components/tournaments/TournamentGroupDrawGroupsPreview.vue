@@ -10,13 +10,12 @@ const props = defineProps<{
     groups: TournamentGroup[];
     groupSize: number;
     participantEditUrl: (participantId: number) => string;
+    participantReplaceUrl: (participantId: number) => string;
 }>();
 
 const emit = defineEmits<{
     'select-slot': [groupName: string, slotNumber: number];
-    'remove-participant': [
-        participant: TournamentGroupParticipant | undefined,
-    ];
+    'remove-participant': [participant: TournamentGroupParticipant | undefined];
 }>();
 
 const participantForSlot = (
@@ -37,6 +36,16 @@ const editUrlForParticipant = (
 
     return props.participantEditUrl(participant.id);
 };
+
+const replaceUrlForParticipant = (
+    participant: TournamentGroupParticipant | undefined,
+): string => {
+    if (!participant) {
+        return '#';
+    }
+
+    return props.participantReplaceUrl(participant.id);
+};
 </script>
 
 <template>
@@ -45,9 +54,7 @@ const editUrlForParticipant = (
         class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
     >
         <div>
-            <h2 class="text-lg font-medium">
-                Grupe
-            </h2>
+            <h2 class="text-lg font-medium">Grupe</h2>
 
             <p class="mt-1 text-sm text-muted-foreground">
                 TV/public prikaz ćemo kasnije povezati na isti raspored.
@@ -64,9 +71,7 @@ const editUrlForParticipant = (
                 class="rounded-lg border border-sidebar-border/70 p-4 dark:border-sidebar-border"
             >
                 <div class="flex items-center justify-between gap-4">
-                    <h3 class="text-lg font-medium">
-                        Grupa {{ group.name }}
-                    </h3>
+                    <h3 class="text-lg font-medium">Grupa {{ group.name }}</h3>
 
                     <span class="text-sm text-muted-foreground">
                         {{ groupSize }} mesta
@@ -89,25 +94,35 @@ const editUrlForParticipant = (
                         >
                             <span>
                                 {{
-                                    participantForSlot(
-                                        group,
-                                        slotNumber,
-                                    )?.display_name
+                                    participantForSlot(group, slotNumber)
+                                        ?.display_name
                                 }}
                             </span>
 
                             <Link
                                 :href="
                                     editUrlForParticipant(
-                                        participantForSlot(
-                                            group,
-                                            slotNumber,
-                                        ),
+                                        participantForSlot(group, slotNumber),
                                     )
                                 "
                                 class="text-xs font-medium text-primary hover:underline"
                             >
                                 Izmeni
+                            </Link>
+
+                            <Link
+                                v-if="
+                                    participantForSlot(group, slotNumber)
+                                        ?.can_replace
+                                "
+                                :href="
+                                    replaceUrlForParticipant(
+                                        participantForSlot(group, slotNumber),
+                                    )
+                                "
+                                class="text-xs font-medium text-yellow-700 hover:underline dark:text-yellow-300"
+                            >
+                                Zameni
                             </Link>
 
                             <button
@@ -116,10 +131,7 @@ const editUrlForParticipant = (
                                 @click="
                                     emit(
                                         'remove-participant',
-                                        participantForSlot(
-                                            group,
-                                            slotNumber,
-                                        ),
+                                        participantForSlot(group, slotNumber),
                                     )
                                 "
                             >
@@ -131,13 +143,7 @@ const editUrlForParticipant = (
                             v-else
                             type="button"
                             class="text-xs font-medium text-primary hover:underline"
-                            @click="
-                                emit(
-                                    'select-slot',
-                                    group.name,
-                                    slotNumber,
-                                )
-                            "
+                            @click="emit('select-slot', group.name, slotNumber)"
                         >
                             Dodaj ovde
                         </button>
