@@ -449,3 +449,18 @@ export type TournamentEditGroupDrawParticipantFormData = {
     nickname: string;
     team_name: string;
 };
+
+
+export type TournamentListItem = TournamentIdentity & {
+    public_code: string;
+    game_type: string;
+    game_type_label: string;
+    match_mode: TournamentMatchMode;
+    match_mode_label: string;
+    status: TournamentStatus;
+    status_label: string;
+    knockout_size: number | null;
+    public_enabled: boolean;
+    resources_count: number;
+    created_at: string | null;
+};
