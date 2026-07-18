@@ -4,6 +4,7 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import PageHeader from '@/components/shared/PageHeader.vue';
 import TournamentBasicInformation from '@/components/tournaments/TournamentBasicInformation.vue';
 import TournamentCreateReview from '@/components/tournaments/TournamentCreateReview.vue';
+import TournamentGroupQualificationSettings from '@/components/tournaments/TournamentGroupQualificationSettings.vue';
 import TournamentResourceSelector from '@/components/tournaments/TournamentResourceSelector.vue';
 
 import { venueTournamentRoutes } from '@/lib/tournamentRoutes';
@@ -34,14 +35,51 @@ const form = useForm<TournamentCreateFormData>({
     game_type: '301',
     match_mode: 'singles',
     group_rounds: 'single',
-    knockout_size: 16,
+
+    group_count: 8,
+    group_size: 5,
+    direct_qualifiers_per_group: 4,
+
+    repechage_enabled: false,
+    repechage_participants_count: null,
+    repechage_qualifiers_count: null,
+
+    knockout_size: 32,
     public_enabled: true,
-    resource_ids: props.resources.map((resource) => resource.id),
+    resource_ids: props.resources.map(
+        (resource) => resource.id,
+    ),
 });
 
-const submit = () => {
-    form.post(routes.store);
+const updateMatchMode = (value: string) => {
+    if (
+        value !== 'singles'
+        && value !== 'doubles'
+    ) {
+        return;
+    }
+
+    form.match_mode = value;
 };
+
+const submit = () => {
+    form
+        .transform((data) => ({
+            ...data,
+
+            repechage_participants_count:
+                data.repechage_enabled
+                    ? data.repechage_participants_count
+                    : null,
+
+            repechage_qualifiers_count:
+                data.repechage_enabled
+                    ? data.repechage_qualifiers_count
+                    : null,
+        }))
+        .post(routes.store);
+};
+
 </script>
 
 <template>
@@ -51,7 +89,7 @@ const submit = () => {
         <PageHeader
             :eyebrow="venue.name"
             title="Novi turnir"
-            description="Kreiraj osnovni draft turnira. Grupe, učesnike i mečeve dodajemo u sledećim koracima."
+            description="Podesi osnovne podatke, grupe, prolaz dalje i resurse turnira na jednom mestu."
         >
             <template #actions>
                 <Link
@@ -82,9 +120,46 @@ const submit = () => {
                     :knockout-size-error="form.errors.knockout_size"
                     @update:name="form.name = $event"
                     @update:game-type="form.game_type = $event"
-                    @update:match-mode="form.match_mode = $event"
+                    @update:match-mode="updateMatchMode"
                     @update:group-rounds="form.group_rounds = $event"
                     @update:knockout-size="form.knockout_size = $event"
+                />
+
+                <TournamentGroupQualificationSettings
+                    :group-count="form.group_count"
+                    :group-size="form.group_size"
+                    :direct-qualifiers-per-group="
+                        form.direct_qualifiers_per_group
+                    "
+                    :repechage-enabled="
+                        form.repechage_enabled
+                    "
+                    :repechage-participants-count="
+                        form.repechage_participants_count
+                    "
+                    :repechage-qualifiers-count="
+                        form.repechage_qualifiers_count
+                    "
+                    :knockout-size="form.knockout_size"
+                    :errors="form.errors"
+                    @update:group-count="
+                        form.group_count = $event
+                    "
+                    @update:group-size="
+                        form.group_size = $event
+                    "
+                    @update:direct-qualifiers-per-group="
+                        form.direct_qualifiers_per_group = $event
+                    "
+                    @update:repechage-enabled="
+                        form.repechage_enabled = $event
+                    "
+                    @update:repechage-participants-count="
+                        form.repechage_participants_count = $event
+                    "
+                    @update:repechage-qualifiers-count="
+                        form.repechage_qualifiers_count = $event
+                    "
                 />
 
                 <TournamentResourceSelector

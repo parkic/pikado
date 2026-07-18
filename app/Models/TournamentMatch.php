@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Builder;
 
 class TournamentMatch extends Model
 {
@@ -24,7 +25,10 @@ class TournamentMatch extends Model
         'bracket_round',
         'bracket_position',
         'participant_a_id',
+        'participant_a_position',
         'participant_b_id',
+        'participant_b_position',
+        'is_hidden',
         'score_a',
         'score_b',
         'winner_participant_id',
@@ -38,6 +42,7 @@ class TournamentMatch extends Model
         'meta',
         'started_at',
         'finished_at',
+
     ];
 
     protected $casts = [
@@ -53,7 +58,18 @@ class TournamentMatch extends Model
         'meta' => 'array',
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
+        'is_hidden' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope('visible_matches', function (Builder $builder): void {
+            $builder->where(
+                $builder->getModel()->qualifyColumn('is_hidden'),
+                false
+            );
+        });
+    }
 
     public function tournament(): BelongsTo
     {

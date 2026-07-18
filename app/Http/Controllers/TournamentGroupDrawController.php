@@ -5,16 +5,21 @@ namespace App\Http\Controllers;
 use App\Enums\MatchMode;
 use App\Enums\ParticipantStatus;
 use App\Enums\ParticipantType;
+use App\Enums\TournamentStatus;
+
 use App\Models\Player;
 use App\Models\Team;
 use App\Models\Tournament;
 use App\Models\TournamentGroup;
 use App\Models\TournamentParticipant;
 use App\Models\Venue;
+
+use App\Services\GroupMatchGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -41,6 +46,7 @@ class TournamentGroupDrawController extends Controller
                 'id' => $tournament->id,
                 'name' => $tournament->name,
                 'slug' => $tournament->slug,
+                'status' => $tournament->status->value,
                 'match_mode' => $tournament->match_mode->value,
                 'match_mode_label' => $tournament->match_mode === MatchMode::SINGLES ? '1v1' : '2v2',
                 'settings' => $tournament->settings ?? [],
@@ -53,11 +59,11 @@ class TournamentGroupDrawController extends Controller
                     'slot_number' => $nextSlot['slot_number'],
                     'group_position' => $nextSlot['group_position'],
                 ] : null,
-                'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
+                'groups' => $tournament->groups->map(fn(TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
                     'sort_order' => $group->sort_order,
-                    'participants' => $group->participants->map(fn (TournamentParticipant $participant) => [
+                    'participants' => $group->participants->map(fn(TournamentParticipant $participant) => [
                         'id' => $participant->id,
                         'participant_type' => $participant->participant_type->value,
                         'group_position' => $participant->group_position,
@@ -71,12 +77,18 @@ class TournamentGroupDrawController extends Controller
         ]);
     }
 
-    public function store(Request $request, Venue $venue, Tournament $tournament): RedirectResponse
+    public function store(Request $request, Venue $venue, Tournament $tournament, GroupMatchGenerator $generator): RedirectResponse
     {
         $user = $request->user();
 
         abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($tournament->venue_id === $venue->id, 404);
+
+        if (! $this->canAddParticipant($tournament)) {
+            return back()->withErrors([
+                'participant' => 'Učesnici više ne mogu da se dodaju u trenutnoj fazi turnira.',
+            ]);
+        }
 
         $this->loadTournamentForDraw($tournament);
 
@@ -95,8 +107,8 @@ class TournamentGroupDrawController extends Controller
 
         if (
             $tournament->participants()
-                ->where('group_position', $targetSlot['group_position'])
-                ->exists()
+            ->where('group_position', $targetSlot['group_position'])
+            ->exists()
         ) {
             return back()
                 ->withErrors([
@@ -106,25 +118,114 @@ class TournamentGroupDrawController extends Controller
 
         if ($tournament->match_mode === MatchMode::SINGLES) {
             $validated = $request->validate([
-                'existing_player_id' => ['nullable', 'integer'],
-                'first_name' => ['required_without:existing_player_id', 'nullable', 'string', 'max:255'],
-                'last_name' => ['required_without:existing_player_id', 'nullable', 'string', 'max:255'],
-                'nickname' => ['nullable', 'string', 'max:255'],
+                'existing_player_id' => [
+                    'nullable',
+                    'integer',
+                ],
+                'first_name' => [
+                    'required_without:existing_player_id',
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
+                'last_name' => [
+                    'required_without:existing_player_id',
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
+                'nickname' => [
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
             ]);
-
-            $this->storePlayerParticipant($venue, $tournament, $targetSlot, $validated);
         } else {
             $validated = $request->validate([
-                'existing_team_id' => ['nullable', 'integer'],
-                'team_name' => ['required_without:existing_team_id', 'nullable', 'string', 'max:255'],
+                'existing_team_id' => [
+                    'nullable',
+                    'integer',
+                ],
+                'team_name' => [
+                    'required_without:existing_team_id',
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
             ]);
+        }
 
-            $this->storeTeamParticipant($venue, $tournament, $targetSlot, $validated);
+        $createdMatches = DB::transaction(function () use (
+            $venue,
+            $tournament,
+            $targetSlot,
+            $validated,
+            $generator,
+        ): int {
+            if (
+                $tournament->match_mode
+                === MatchMode::SINGLES
+            ) {
+                $this->storePlayerParticipant(
+                    $venue,
+                    $tournament,
+                    $targetSlot,
+                    $validated,
+                );
+            } else {
+                $this->storeTeamParticipant(
+                    $venue,
+                    $tournament,
+                    $targetSlot,
+                    $validated,
+                );
+            }
+
+            $participant = $tournament
+                ->participants()
+                ->where(
+                    'group_position',
+                    $targetSlot['group_position'],
+                )
+                ->firstOrFail();
+
+            if (
+                $tournament->status
+                !== TournamentStatus::GROUP_STAGE
+            ) {
+                return 0;
+            }
+
+            return $generator->generateForParticipant(
+                $tournament,
+                $participant,
+            );
+        });
+
+        $this->syncParticipantRosterStatus($tournament);
+
+        $successMessage = 'Učesnik je dodat u '
+            . $targetSlot['group_position']
+            . '.';
+
+        if (
+            $tournament->status
+            === TournamentStatus::GROUP_STAGE
+        ) {
+            $successMessage .= sprintf(
+                ' Aktivirano je mečeva na njegovim rezervisanim pozicijama u rasporedu: %d.',
+                $createdMatches,
+            );
+        } elseif (
+            $tournament->status
+            === TournamentStatus::READY
+        ) {
+            $successMessage .= ' Sva mesta su popunjena i turnir je spreman za generisanje mečeva.';
         }
 
         return redirect()
-            ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
-            ->with('success', 'Učesnik je dodat u ' . $targetSlot['group_position'] . '.');
+            ->route('venues.tournaments.group_draw.show', [$venue, $tournament],)
+            ->with('success', $successMessage);
     }
 
     public function destroyParticipant(
@@ -139,9 +240,17 @@ class TournamentGroupDrawController extends Controller
         abort_unless($tournament->venue_id === $venue->id, 404);
         abort_unless($participant->tournament_id === $tournament->id, 404);
 
+        if (! $this->canManageParticipantRoster($tournament)) {
+            return back()->withErrors([
+                'participant' => 'Učesnici ne mogu da se uklanjaju nakon početka grupne faze.',
+            ]);
+        }
+
         $groupPosition = $participant->group_position;
 
         $participant->delete();
+
+        $this->syncParticipantRosterStatus($tournament);
 
         return redirect()
             ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
@@ -285,9 +394,9 @@ class TournamentGroupDrawController extends Controller
 
             if (
                 $tournament->participants()
-                    ->where('participant_type', ParticipantType::PLAYER->value)
-                    ->where('player_id', $player->id)
-                    ->exists()
+                ->where('participant_type', ParticipantType::PLAYER->value)
+                ->where('player_id', $player->id)
+                ->exists()
             ) {
                 throw ValidationException::withMessages([
                     'existing_player_id' => 'Ovaj igrač je već dodat u turnir.',
@@ -362,9 +471,9 @@ class TournamentGroupDrawController extends Controller
 
             if (
                 $tournament->participants()
-                    ->where('participant_type', ParticipantType::TEAM->value)
-                    ->where('team_id', $team->id)
-                    ->exists()
+                ->where('participant_type', ParticipantType::TEAM->value)
+                ->where('team_id', $team->id)
+                ->exists()
             ) {
                 throw ValidationException::withMessages([
                     'existing_team_id' => 'Ova ekipa je već dodata u turnir.',
@@ -413,10 +522,10 @@ class TournamentGroupDrawController extends Controller
     private function loadTournamentForDraw(Tournament $tournament): void
     {
         $tournament->load([
-            'groups' => fn ($query) => $query
+            'groups' => fn($query) => $query
                 ->orderBy('sort_order')
                 ->orderBy('name'),
-            'groups.participants' => fn ($query) => $query
+            'groups.participants' => fn($query) => $query
                 ->orderBy('group_position')
                 ->orderBy('id'),
             'groups.participants.player',
@@ -529,7 +638,7 @@ class TournamentGroupDrawController extends Controller
             ->orderBy('last_name')
             ->orderBy('nickname')
             ->get()
-            ->map(fn (Player $player) => [
+            ->map(fn(Player $player) => [
                 'id' => $player->id,
                 'first_name' => $player->first_name,
                 'last_name' => $player->last_name,
@@ -554,11 +663,74 @@ class TournamentGroupDrawController extends Controller
             ->whereNotIn('id', $usedTeamIds)
             ->orderBy('name')
             ->get()
-            ->map(fn (Team $team) => [
+            ->map(fn(Team $team) => [
                 'id' => $team->id,
                 'name' => $team->name,
             ])
             ->values()
             ->all();
+    }
+
+    private function canManageParticipantRoster(
+        Tournament $tournament
+    ): bool {
+        return in_array(
+            $tournament->status,
+            [
+                TournamentStatus::DRAFT,
+                TournamentStatus::GROUP_DRAW,
+                TournamentStatus::READY,
+            ],
+            true,
+        );
+    }
+
+    private function canAddParticipant(
+        Tournament $tournament
+    ): bool {
+        return in_array(
+            $tournament->status,
+            [
+                TournamentStatus::DRAFT,
+                TournamentStatus::GROUP_DRAW,
+                TournamentStatus::READY,
+                TournamentStatus::GROUP_STAGE,
+            ],
+            true,
+        );
+    }
+
+    private function syncParticipantRosterStatus(
+        Tournament $tournament
+    ): void {
+        if (! $this->canManageParticipantRoster($tournament)) {
+            return;
+        }
+
+        $totalSlots = $this->totalSlots($tournament);
+
+        if ($totalSlots < 1) {
+            return;
+        }
+
+        $participantsCount = $tournament
+            ->participants()
+            ->count();
+
+        if ($participantsCount === 0) {
+            $nextStatus = TournamentStatus::DRAFT;
+        } elseif ($participantsCount >= $totalSlots) {
+            $nextStatus = TournamentStatus::READY;
+        } else {
+            $nextStatus = TournamentStatus::GROUP_DRAW;
+        }
+
+        if ($tournament->status === $nextStatus) {
+            return;
+        }
+
+        $tournament->update([
+            'status' => $nextStatus,
+        ]);
     }
 }

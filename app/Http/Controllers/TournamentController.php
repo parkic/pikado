@@ -9,6 +9,8 @@ use App\Enums\MatchStage;
 use App\Enums\MatchStatus;
 use App\Enums\ScoringMode;
 use App\Enums\TournamentStatus;
+use App\Enums\ParticipantStatus;
+
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +40,7 @@ class TournamentController extends Controller
             ->withCount('resources')
             ->latest()
             ->get()
-            ->map(fn (Tournament $tournament) => [
+            ->map(fn(Tournament $tournament) => [
                 'id' => $tournament->id,
                 'name' => $tournament->name,
                 'slug' => $tournament->slug,
@@ -76,7 +78,7 @@ class TournamentController extends Controller
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
-            ->map(fn ($resource) => [
+            ->map(fn($resource) => [
                 'id' => $resource->id,
                 'name' => $resource->name,
                 'type' => $resource->type->value,
@@ -124,13 +126,13 @@ class TournamentController extends Controller
 
         $tournament->load([
             'createdBy',
-            'resources' => fn ($query) => $query
+            'resources' => fn($query) => $query
                 ->orderBy('sort_order')
                 ->orderBy('name'),
-            'groups' => fn ($query) => $query
+            'groups' => fn($query) => $query
                 ->orderBy('sort_order')
                 ->orderBy('name'),
-            'groups.participants' => fn ($query) => $query
+            'groups.participants' => fn($query) => $query
                 ->orderBy('group_position')
                 ->orderBy('id'),
             'groups.participants.player',
@@ -140,9 +142,9 @@ class TournamentController extends Controller
         $tournament->loadCount([
             'groups',
             'participants',
-            'matches as group_matches_count' => fn ($query) => $query
+            'matches as group_matches_count' => fn($query) => $query
                 ->where('stage', MatchStage::GROUP->value),
-            'matches as finished_group_matches_count' => fn ($query) => $query
+            'matches as finished_group_matches_count' => fn($query) => $query
                 ->where('stage', MatchStage::GROUP->value)
                 ->where('status', MatchStatus::FINISHED->value),
         ]);
@@ -181,16 +183,16 @@ class TournamentController extends Controller
                 'group_matches_count' => $tournament->group_matches_count,
                 'finished_group_matches_count' => $tournament->finished_group_matches_count,
                 'can_start_group_draw' => $this->canStartGroupDraw($tournament, $totalSlots),
-                'can_mark_ready' => $this->canMarkReady($tournament, $totalSlots),
-                'can_generate_group_matches' => $this->canGenerateGroupMatches($tournament, $totalSlots),
+                'can_mark_ready' => $this->canMarkReady($tournament),
+                'can_generate_group_matches' => $this->canGenerateGroupMatches($tournament),
                 'can_complete_group_stage' => $this->canCompleteGroupStage($tournament),
                 'next_stage_after_groups' => $this->nextStageAfterGroups($tournament),
                 'podium' => $podium,
-                'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
+                'groups' => $tournament->groups->map(fn(TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
                     'sort_order' => $group->sort_order,
-                    'participants' => $group->participants->map(fn (TournamentParticipant $participant) => [
+                    'participants' => $group->participants->map(fn(TournamentParticipant $participant) => [
                         'id' => $participant->id,
                         'participant_type' => $participant->participant_type->value,
                         'group_position' => $participant->group_position,
@@ -198,7 +200,7 @@ class TournamentController extends Controller
                         'display_name' => $this->participantDisplayName($participant),
                     ]),
                 ]),
-                'resources' => $tournament->resources->map(fn ($resource) => [
+                'resources' => $tournament->resources->map(fn($resource) => [
                     'id' => $resource->id,
                     'name' => $resource->name,
                     'type' => $resource->type->value,
@@ -218,7 +220,7 @@ class TournamentController extends Controller
         abort_unless($tournament->venue_id === $venue->id, 404);
 
         $tournament->load([
-            'groups' => fn ($query) => $query
+            'groups' => fn($query) => $query
                 ->orderBy('sort_order')
                 ->orderBy('name'),
         ]);
@@ -237,7 +239,7 @@ class TournamentController extends Controller
                 'status_label' => $this->statusLabel($tournament->status),
                 'settings' => $tournament->settings ?? [],
                 'participants_count' => $tournament->participants()->count(),
-                'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
+                'groups' => $tournament->groups->map(fn(TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
                     'sort_order' => $group->sort_order,
@@ -271,7 +273,7 @@ class TournamentController extends Controller
             $groupSize = (int) $validated['group_size'];
 
             $desiredGroupNames = collect(range(1, $groupCount))
-                ->map(fn (int $index) => $this->groupNameFromIndex($index));
+                ->map(fn(int $index) => $this->groupNameFromIndex($index));
 
             $existingGroups = $tournament->groups()
                 ->withTrashed()
@@ -303,7 +305,7 @@ class TournamentController extends Controller
             $tournament->groups()
                 ->whereNotIn('name', $desiredGroupNames->all())
                 ->get()
-                ->each(fn (TournamentGroup $group) => $group->delete());
+                ->each(fn(TournamentGroup $group) => $group->delete());
 
             $settings = $tournament->settings ?? [];
 
@@ -441,11 +443,27 @@ class TournamentController extends Controller
         abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($tournament->venue_id === $venue->id, 404);
 
-        $totalSlots = $this->totalGroupSlots($tournament);
-
-        if (! $this->canMarkReady($tournament, $totalSlots)) {
+        if (!in_array($tournament->status, [TournamentStatus::DRAFT, TournamentStatus::GROUP_DRAW, TournamentStatus::READY,], true)) {
             return back()->withErrors([
-                'status' => 'Turnir ne može biti označen kao spreman dok sva mesta u grupama nisu popunjena.',
+                'status' => 'Unos učesnika više ne može da se završava u trenutnoj fazi turnira.',
+            ]);
+        }
+
+        if ($tournament
+            ->matches()
+            ->where('stage', MatchStage::GROUP->value,)
+            ->exists()
+        ) {
+            return back()->withErrors([
+                'status' => 'Grupni mečevi su već generisani.',
+            ]);
+        }
+
+        $rosterValidationError = $this->groupRosterValidationError($tournament);
+
+        if ($rosterValidationError !== null) {
+            return back()->withErrors([
+                'status' => $rosterValidationError,
             ]);
         }
 
@@ -455,7 +473,7 @@ class TournamentController extends Controller
 
         return redirect()
             ->route('venues.tournaments.show', [$venue, $tournament])
-            ->with('success', 'Turnir je označen kao spreman.');
+            ->with('success', 'Unos učesnika je završen. Turnir je spreman za generisanje grupnih mečeva.',);
     }
 
     public function generateGroupMatches(
@@ -469,11 +487,9 @@ class TournamentController extends Controller
         abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($tournament->venue_id === $venue->id, 404);
 
-        $totalSlots = $this->totalGroupSlots($tournament);
-
-        if (! $this->canGenerateGroupMatches($tournament, $totalSlots)) {
+        if (! $this->canGenerateGroupMatches($tournament)) {
             return back()->withErrors([
-                'matches' => 'Grupni mečevi ne mogu da se generišu. Turnir mora biti spreman, grupe popunjene i bez već generisanih grupnih mečeva.',
+                'matches' => 'Grupni mečevi ne mogu da se generišu. Turnir mora biti spreman, raspodela učesnika po grupama validna i grupni mečevi ne smeju već postojati.',
             ]);
         }
 
@@ -521,18 +537,265 @@ class TournamentController extends Controller
         abort_unless($user->canAccessVenue($venue), 403);
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'game_type' => ['required', Rule::in(array_column(GameType::cases(), 'value'))],
-            'match_mode' => ['required', Rule::in(array_column(MatchMode::cases(), 'value'))],
-            'group_rounds' => ['required', Rule::in(array_column(GroupRounds::cases(), 'value'))],
-            'knockout_size' => ['nullable', 'integer', Rule::in([8, 16, 32])],
-            'public_enabled' => ['required', 'boolean'],
-            'resource_ids' => ['array'],
-            'resource_ids.*' => ['integer'],
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+            'game_type' => [
+                'required',
+                Rule::in(array_column(GameType::cases(), 'value')),
+            ],
+            'match_mode' => [
+                'required',
+                Rule::in(array_column(MatchMode::cases(), 'value')),
+            ],
+            'group_rounds' => [
+                'required',
+                Rule::in(array_column(GroupRounds::cases(), 'value')),
+            ],
+            'knockout_size' => [
+                'nullable',
+                'integer',
+                Rule::in([8, 16, 32]),
+            ],
+            'public_enabled' => [
+                'required',
+                'boolean',
+            ],
+            'resource_ids' => [
+                'array',
+            ],
+            'resource_ids.*' => [
+                'integer',
+            ],
+
+            /*
+            * Ova polja su privremeno nullable da postojeća
+            * Create forma nastavi da radi dok je ne proširimo.
+            */
+            'group_count' => [
+                'nullable',
+                'integer',
+                'min:1',
+                'max:32',
+            ],
+            'group_size' => [
+                'nullable',
+                'integer',
+                'min:2',
+                'max:16',
+            ],
+            'direct_qualifiers_per_group' => [
+                'nullable',
+                'integer',
+                'min:0',
+                'max:16',
+            ],
+            'repechage_enabled' => [
+                'nullable',
+                'boolean',
+            ],
+            'repechage_participants_count' => [
+                'nullable',
+                'integer',
+                'min:0',
+                'max:128',
+            ],
+            'repechage_qualifiers_count' => [
+                'nullable',
+                'integer',
+                'min:0',
+                'max:64',
+            ],
         ]);
 
-        $resourceIds = collect($validated['resource_ids'] ?? [])
-            ->map(fn ($id) => (int) $id)
+        $groupCount = isset($validated['group_count'])
+            ? (int) $validated['group_count']
+            : null;
+
+        $groupSize = isset($validated['group_size'])
+            ? (int) $validated['group_size']
+            : null;
+
+        $directQualifiersPerGroup =
+            isset($validated['direct_qualifiers_per_group'])
+            ? (int) $validated['direct_qualifiers_per_group']
+            : null;
+
+        $repechageEnabled = (bool) (
+            $validated['repechage_enabled'] ?? false
+        );
+
+        $repechageParticipantsCount =
+            isset($validated['repechage_participants_count'])
+            ? (int) $validated['repechage_participants_count']
+            : null;
+
+        $repechageQualifiersCount =
+            isset($validated['repechage_qualifiers_count'])
+            ? (int) $validated['repechage_qualifiers_count']
+            : null;
+
+        $knockoutSize = isset($validated['knockout_size'])
+            ? (int) $validated['knockout_size']
+            : null;
+
+        /*
+        * Broj grupa i veličina grupe moraju uvek da budu
+        * poslati zajedno.
+        */
+        if (
+            ($groupCount === null && $groupSize !== null)
+            || ($groupCount !== null && $groupSize === null)
+        ) {
+            return back()
+                ->withErrors([
+                    'group_count' => 'Broj grupa i veličina grupe moraju biti zajedno podešeni.',
+                ])
+                ->withInput();
+        }
+
+        /*
+        * Kada su grupe podešene, moramo znati koliko
+        * učesnika ide direktno iz svake grupe.
+        */
+        if (
+            $groupCount !== null
+            && $directQualifiersPerGroup === null
+        ) {
+            return back()
+                ->withErrors([
+                    'direct_qualifiers_per_group' => 'Unesi broj direktnih prolaza po grupi.',
+                ])
+                ->withInput();
+        }
+
+        if (
+            $groupSize !== null
+            && $directQualifiersPerGroup !== null
+            && $directQualifiersPerGroup > $groupSize
+        ) {
+            return back()
+                ->withErrors([
+                    'direct_qualifiers_per_group' => 'Broj direktnih prolaza ne može biti veći od veličine grupe.',
+                ])
+                ->withInput();
+        }
+
+        if ($repechageEnabled) {
+            if ($groupCount === null || $groupSize === null) {
+                return back()
+                    ->withErrors([
+                        'repechage_enabled' => 'Grupe moraju biti podešene pre uključivanja repasaža.',
+                    ])
+                    ->withInput();
+            }
+
+            if (
+                $repechageParticipantsCount === null
+                || $repechageParticipantsCount < 1
+            ) {
+                return back()
+                    ->withErrors([
+                        'repechage_participants_count' => 'Unesi broj učesnika koji ulaze u repasaž.',
+                    ])
+                    ->withInput();
+            }
+
+            if (
+                $repechageQualifiersCount === null
+                || $repechageQualifiersCount < 1
+            ) {
+                return back()
+                    ->withErrors([
+                        'repechage_qualifiers_count' => 'Unesi broj učesnika koji prolaze iz repasaža.',
+                    ])
+                    ->withInput();
+            }
+
+            if (
+                $repechageParticipantsCount % $groupCount !== 0
+            ) {
+                return back()
+                    ->withErrors([
+                        'repechage_participants_count' => 'Ukupan broj učesnika u repasažu mora biti deljiv sa brojem grupa.',
+                    ])
+                    ->withInput();
+            }
+
+            $repechagePerGroup = (int) (
+                $repechageParticipantsCount / $groupCount
+            );
+
+            $availableRepechageSlotsPerGroup = max(
+                0,
+                $groupSize - ($directQualifiersPerGroup ?? 0),
+            );
+
+            if (
+                $repechagePerGroup
+                > $availableRepechageSlotsPerGroup
+            ) {
+                return back()
+                    ->withErrors([
+                        'repechage_participants_count' => 'Previše učesnika za repasaž. Po grupi nema dovoljno učesnika posle direktnog prolaza.',
+                    ])
+                    ->withInput();
+            }
+
+            if (
+                $repechageQualifiersCount
+                > $repechageParticipantsCount
+            ) {
+                return back()
+                    ->withErrors([
+                        'repechage_qualifiers_count' => 'Broj prolaza iz repasaža ne može biti veći od broja učesnika u repasažu.',
+                    ])
+                    ->withInput();
+            }
+        } else {
+            $repechageParticipantsCount = null;
+            $repechageQualifiersCount = null;
+        }
+
+        /*
+        * Kada je kompletno podešavanje poslato, proveravamo
+        * da broj kvalifikovanih odgovara veličini nokauta.
+        */
+        if (
+            $groupCount !== null
+            && $directQualifiersPerGroup !== null
+            && $knockoutSize !== null
+        ) {
+            $directQualifiersCount =
+                $groupCount * $directQualifiersPerGroup;
+
+            $totalKnockoutQualifiers =
+                $directQualifiersCount
+                + (
+                    $repechageEnabled
+                    ? ($repechageQualifiersCount ?? 0)
+                    : 0
+                );
+
+            if ($totalKnockoutQualifiers !== $knockoutSize) {
+                return back()
+                    ->withErrors([
+                        'knockout_size' => sprintf(
+                            'Ukupan broj učesnika koji prolaze dalje je %d, a veličina nokauta je %d.',
+                            $totalKnockoutQualifiers,
+                            $knockoutSize,
+                        ),
+                    ])
+                    ->withInput();
+            }
+        }
+
+        $resourceIds = collect(
+            $validated['resource_ids'] ?? [],
+        )
+            ->map(fn($id) => (int) $id)
             ->unique()
             ->values();
 
@@ -551,48 +814,104 @@ class TournamentController extends Controller
                 ->withInput();
         }
 
-        DB::transaction(function () use ($validated, $venue, $venueResources, $user): void {
-            $gameType = GameType::from($validated['game_type']);
+        $tournament = DB::transaction(function () use (
+            $validated,
+            $venue,
+            $venueResources,
+            $user,
+            $groupCount,
+            $groupSize,
+            $directQualifiersPerGroup,
+            $repechageEnabled,
+            $repechageParticipantsCount,
+            $repechageQualifiersCount,
+            $knockoutSize,
+        ): Tournament {
+            $gameType = GameType::from(
+                $validated['game_type'],
+            );
 
             $tournament = Tournament::create([
                 'venue_id' => $venue->id,
                 'name' => $validated['name'],
-                'slug' => $this->uniqueSlug($venue, $validated['name']),
+                'slug' => $this->uniqueSlug(
+                    $venue,
+                    $validated['name'],
+                ),
                 'public_code' => $this->uniquePublicCode(),
                 'game_type' => $gameType,
-                'match_mode' => MatchMode::from($validated['match_mode']),
+                'match_mode' => MatchMode::from(
+                    $validated['match_mode'],
+                ),
                 'status' => TournamentStatus::DRAFT,
-                'group_rounds' => GroupRounds::from($validated['group_rounds']),
-                'scoring_mode' => $this->defaultScoringMode($gameType),
-                'knockout_size' => $validated['knockout_size'] ?? null,
-                'public_enabled' => $validated['public_enabled'],
+                'group_rounds' => GroupRounds::from(
+                    $validated['group_rounds'],
+                ),
+                'scoring_mode' => $this->defaultScoringMode(
+                    $gameType,
+                ),
+                'knockout_size' => $knockoutSize,
+                'public_enabled' =>
+                $validated['public_enabled'],
                 'settings' => [
-                    'group_count' => null,
-                    'group_size' => null,
-                    'direct_qualifiers_per_group' => null,
+                    'group_count' => $groupCount,
+                    'group_size' => $groupSize,
+                    'direct_qualifiers_per_group' =>
+                    $directQualifiersPerGroup,
                     'best_position_qualifiers' => [],
-                    'repechage_enabled' => false,
-                    'repechage_qualifiers_count' => null,
+                    'repechage_enabled' =>
+                    $repechageEnabled,
+                    'repechage_participants_count' =>
+                    $repechageParticipantsCount,
+                    'repechage_qualifiers_count' =>
+                    $repechageQualifiersCount,
                     'avoid_same_group_rematch' => true,
                 ],
                 'created_by_user_id' => $user->id,
             ]);
 
+            /*
+            * Kada Create forma pošalje podešavanje grupa,
+            * grupe A, B, C... nastaju odmah.
+            */
+            if ($groupCount !== null) {
+                foreach (range(1, $groupCount) as $index) {
+                    TournamentGroup::create([
+                        'tournament_id' => $tournament->id,
+                        'name' => $this->groupNameFromIndex(
+                            $index,
+                        ),
+                        'sort_order' => $index,
+                    ]);
+                }
+            }
+
             foreach ($venueResources as $venueResource) {
                 TournamentResource::create([
                     'tournament_id' => $tournament->id,
-                    'venue_resource_id' => $venueResource->id,
+                    'venue_resource_id' =>
+                    $venueResource->id,
                     'name' => $venueResource->name,
                     'type' => $venueResource->type,
-                    'sort_order' => $venueResource->sort_order,
-                    'is_active' => $venueResource->is_active,
+                    'sort_order' =>
+                    $venueResource->sort_order,
+                    'is_active' =>
+                    $venueResource->is_active,
                 ]);
             }
+
+            return $tournament;
         });
 
         return redirect()
-            ->route('venues.tournaments.index', $venue)
-            ->with('success', 'Turnir je sačuvan kao draft.');
+            ->route(
+                'venues.tournaments.show',
+                [$venue, $tournament],
+            )
+            ->with(
+                'success',
+                'Turnir i njegova podešavanja su sačuvani.',
+            );
     }
 
     private function uniqueSlug(Venue $venue, string $name): string
@@ -608,9 +927,9 @@ class TournamentController extends Controller
 
         while (
             $venue->tournaments()
-                ->withTrashed()
-                ->where('slug', $slug)
-                ->exists()
+            ->withTrashed()
+            ->where('slug', $slug)
+            ->exists()
         ) {
             $slug = $baseSlug . '-' . $counter;
             $counter++;
@@ -625,8 +944,8 @@ class TournamentController extends Controller
             $code = Str::lower(Str::random(8));
         } while (
             Tournament::withTrashed()
-                ->where('public_code', $code)
-                ->exists()
+            ->where('public_code', $code)
+            ->exists()
         );
 
         return $code;
@@ -760,7 +1079,7 @@ class TournamentController extends Controller
         $firstMatch = $allMatches->first();
 
         $seriesMatches = $allMatches
-            ->filter(fn (TournamentMatch $match) => $match->bracket_round === $firstMatch->bracket_round
+            ->filter(fn(TournamentMatch $match) => $match->bracket_round === $firstMatch->bracket_round
                 && (int) $match->bracket_position === (int) $firstMatch->bracket_position)
             ->values();
 
@@ -882,40 +1201,188 @@ class TournamentController extends Controller
             ], true);
     }
 
-    private function canMarkReady(Tournament $tournament, int $totalSlots): bool
+    private function canMarkReady(Tournament $tournament): bool
     {
-        if ($totalSlots < 1) {
+        if (! in_array($tournament->status, [TournamentStatus::DRAFT, TournamentStatus::GROUP_DRAW, TournamentStatus::READY,], true,)) {
             return false;
         }
 
-        if (! in_array($tournament->status, [
-            TournamentStatus::DRAFT,
-            TournamentStatus::GROUP_DRAW,
-            TournamentStatus::READY,
-        ], true)) {
+        if ($tournament
+            ->matches()
+            ->where('stage', MatchStage::GROUP->value,)
+            ->exists()
+        ) {
             return false;
         }
 
-        return $tournament->participants()->count() >= $totalSlots;
+        return $this->groupRosterValidationError($tournament) === null;
     }
 
-    private function canGenerateGroupMatches(Tournament $tournament, int $totalSlots): bool
+    private function canGenerateGroupMatches(Tournament $tournament): bool
     {
         if ($tournament->status !== TournamentStatus::READY) {
             return false;
         }
 
-        if ($totalSlots < 1) {
-            return false;
-        }
-
-        if ($tournament->participants()->count() < $totalSlots) {
+        if ($this->groupRosterValidationError($tournament) !== null) {
             return false;
         }
 
         return ! $tournament->matches()
-            ->where('stage', MatchStage::GROUP->value)
+            ->where('stage', MatchStage::GROUP->value,)
             ->exists();
+    }
+
+    private function groupRosterValidationError(
+        Tournament $tournament
+    ): ?string {
+        $groups = $tournament->groups()
+            ->withCount([
+                'participants as active_participants_count' =>
+                fn($query) => $query->where(
+                    'status',
+                    ParticipantStatus::ACTIVE->value,
+                ),
+            ])
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+
+        if ($groups->isEmpty()) {
+            return 'Turnir nema podešene grupe.';
+        }
+
+        $participantCounts = $groups
+            ->pluck('active_participants_count')
+            ->map(fn($count) => (int) $count);
+
+        $minimumParticipantsCount = (int) (
+            $participantCounts->min() ?? 0
+        );
+
+        $maximumParticipantsCount = (int) (
+            $participantCounts->max() ?? 0
+        );
+
+        if ($minimumParticipantsCount < 2) {
+            return 'Svaka grupa mora imati najmanje dva učesnika.';
+        }
+
+        if (
+            $maximumParticipantsCount
+            - $minimumParticipantsCount
+            > 1
+        ) {
+            return 'Grupe nisu ravnomerno popunjene. Razlika između najveće i najmanje grupe može biti najviše jedan učesnik.';
+        }
+
+        $settings = $tournament->settings ?? [];
+
+        $directQualifiersPerGroup = data_get(
+            $settings,
+            'direct_qualifiers_per_group',
+        );
+
+        if ($directQualifiersPerGroup === null) {
+            return 'Podesi broj direktnih prolaza po grupi.';
+        }
+
+        $directQualifiersPerGroup =
+            (int) $directQualifiersPerGroup;
+
+        if (
+            $directQualifiersPerGroup
+            > $minimumParticipantsCount
+        ) {
+            return 'Broj direktnih prolaza po grupi ne može biti veći od broja učesnika u najmanjoj grupi.';
+        }
+
+        $groupsCount = $groups->count();
+
+        $repechageEnabled = (bool) data_get(
+            $settings,
+            'repechage_enabled',
+            false,
+        );
+
+        $repechageQualifiersCount = 0;
+
+        if ($repechageEnabled) {
+            $repechageParticipantsCount = (int) data_get(
+                $settings,
+                'repechage_participants_count',
+                0,
+            );
+
+            $repechageQualifiersCount = (int) data_get(
+                $settings,
+                'repechage_qualifiers_count',
+                0,
+            );
+
+            if ($repechageParticipantsCount < 1) {
+                return 'Podesi broj učesnika koji ulaze u repasaž.';
+            }
+
+            if ($repechageQualifiersCount < 1) {
+                return 'Podesi broj učesnika koji prolaze iz repasaža.';
+            }
+
+            if (
+                $repechageParticipantsCount
+                % $groupsCount
+                !== 0
+            ) {
+                return 'Ukupan broj učesnika u repasažu mora biti deljiv sa brojem grupa.';
+            }
+
+            $repechagePerGroup = (int) (
+                $repechageParticipantsCount
+                / $groupsCount
+            );
+
+            $availableRepechagePlacesPerGroup = max(
+                0,
+                $minimumParticipantsCount
+                    - $directQualifiersPerGroup,
+            );
+
+            if (
+                $repechagePerGroup
+                > $availableRepechagePlacesPerGroup
+            ) {
+                return 'U najmanjoj grupi nema dovoljno učesnika za podešeni broj direktnih prolaza i mesta u repasažu.';
+            }
+
+            if (
+                $repechageQualifiersCount
+                > $repechageParticipantsCount
+            ) {
+                return 'Broj prolaza iz repasaža ne može biti veći od broja učesnika u repasažu.';
+            }
+        }
+
+        if ($tournament->knockout_size !== null) {
+            $totalKnockoutParticipants =
+                (
+                    $groupsCount
+                    * $directQualifiersPerGroup
+                )
+                + $repechageQualifiersCount;
+
+            if (
+                $totalKnockoutParticipants
+                !== (int) $tournament->knockout_size
+            ) {
+                return sprintf(
+                    'Podešavanja trenutno daju %d učesnika u nokautu, dok je izabran Top %d.',
+                    $totalKnockoutParticipants,
+                    (int) $tournament->knockout_size,
+                );
+            }
+        }
+
+        return null;
     }
 
     private function canCompleteGroupStage(Tournament $tournament): bool

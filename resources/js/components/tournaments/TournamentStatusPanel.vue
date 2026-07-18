@@ -7,6 +7,7 @@ defineProps<{
     status: TournamentStatus;
     canGenerateGroupMatches: boolean;
     canCompleteGroupStage: boolean;
+    groupDrawUrl: string;
     scheduleUrl: string;
     standingsUrl: string;
     repechageUrl: string;
@@ -25,12 +26,19 @@ const emit = defineEmits<{
         class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
     >
         <h2 class="text-lg font-medium">
-            Turnir je u draft statusu
+            Turnir je spreman za unos učesnika
         </h2>
 
         <p class="mt-1 text-sm">
-            Podesi grupe i pokreni Group Draw kada budeš spreman za izvlačenje učesnika.
+            Grupe i prolaz dalje su već podešeni. Sledeći korak je unos učesnika u slobodna mesta.
         </p>
+
+        <Link
+            :href="groupDrawUrl"
+            class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+        >
+            Unesi učesnike
+        </Link>
     </div>
 
     <div
@@ -38,12 +46,19 @@ const emit = defineEmits<{
         class="rounded-xl border border-primary/30 bg-primary/5 p-4"
     >
         <h2 class="text-lg font-medium">
-            Group Draw je aktivan
+            Unos učesnika je u toku
         </h2>
 
         <p class="mt-1 text-sm text-muted-foreground">
-            Popuni sva mesta u grupama. Kada sva mesta budu popunjena, možeš označiti turnir kao spreman.
+            Nastavi sa popunjavanjem grupa. Unos možeš završiti i pre maksimalnog kapaciteta kada su grupe ravnomerno raspoređene.
         </p>
+
+        <Link
+            :href="groupDrawUrl"
+            class="mt-4 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+        >
+            Nastavi unos učesnika
+        </Link>
     </div>
 
     <div

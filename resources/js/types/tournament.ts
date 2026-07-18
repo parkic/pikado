@@ -147,6 +147,13 @@ export type TournamentCreateFormData = {
     knockout_size: number | null;
     public_enabled: boolean;
     resource_ids: number[];
+
+    group_count: number;
+    group_size: number;
+    direct_qualifiers_per_group: number;
+    repechage_enabled: boolean;
+    repechage_participants_count: number | null;
+    repechage_qualifiers_count: number | null;
 };
 
 export type TournamentGroupsSetupData = TournamentIdentity & {
@@ -196,6 +203,7 @@ export type TournamentGroupDrawNextSlot = {
 };
 
 export type TournamentGroupDrawData = TournamentIdentity & {
+    status: TournamentStatus;
     match_mode: TournamentMatchMode;
     match_mode_label: string;
     settings: TournamentSettings;

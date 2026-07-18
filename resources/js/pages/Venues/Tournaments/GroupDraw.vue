@@ -42,14 +42,9 @@ defineOptions({
     },
 });
 
-const routes = tournamentRoutes(
-    props.venue.slug,
-    props.tournament.slug,
-);
+const routes = tournamentRoutes(props.venue.slug, props.tournament.slug);
 
-const {
-    removeParticipant,
-} = useTournamentGroupDrawParticipantRemoval({
+const { removeParticipant } = useTournamentGroupDrawParticipantRemoval({
     participantDeleteUrl: routes.groupDrawParticipant,
 });
 
@@ -62,6 +57,8 @@ const form = useForm<TournamentGroupDrawFormData>({
     team_name: '',
     group_position: '',
 });
+
+const finishParticipantEntryForm = useForm({});
 
 const {
     groupSize,
@@ -109,6 +106,12 @@ const submit = () => {
         },
     });
 };
+
+const finishParticipantEntry = () => {
+    finishParticipantEntryForm.post(routes.markReady, {
+        preserveScroll: true,
+    });
+};
 </script>
 
 <template>
@@ -151,15 +154,62 @@ const submit = () => {
             :groups-setup-url="routes.groupsSetup"
         />
 
+        <div
+            v-if="
+                hasGroupSetup &&
+                tournament.participants_count > 0 &&
+                (tournament.status === 'draft' ||
+                    tournament.status === 'group_draw')
+            "
+            class="rounded-xl border border-primary/30 bg-primary/5 p-4"
+        >
+            <div
+                class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+            >
+                <div>
+                    <h2 class="text-lg font-medium">
+                        Završavanje unosa učesnika
+                    </h2>
+
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        Trenutno je uneto
+                        {{ tournament.participants_count }}
+                        od maksimalno
+                        {{ tournament.total_slots }}
+                        učesnika. Unos možeš završiti i pre popunjavanja svih
+                        mesta, pod uslovom da su grupe ravnomerno raspoređene.
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    :disabled="finishParticipantEntryForm.processing"
+                    class="inline-flex shrink-0 items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    @click="finishParticipantEntry"
+                >
+                    {{
+                        finishParticipantEntryForm.processing
+                            ? 'Proveravam...'
+                            : 'Završi unos učesnika'
+                    }}
+                </button>
+            </div>
+
+            <p
+                v-if="finishParticipantEntryForm.errors.status"
+                class="mt-3 text-sm text-red-600"
+            >
+                {{ finishParticipantEntryForm.errors.status }}
+            </p>
+        </div>
+
         <div class="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
             <form
                 v-if="!isGroupDrawComplete && hasGroupSetup"
-                class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border xl:sticky xl:top-4 xl:self-start"
+                class="rounded-xl border border-sidebar-border/70 p-4 xl:sticky xl:top-4 xl:self-start dark:border-sidebar-border"
                 @submit.prevent="submit"
             >
-                <h2 class="text-lg font-medium">
-                    Sledeći učesnik
-                </h2>
+                <h2 class="text-lg font-medium">Sledeći učesnik</h2>
 
                 <TournamentGroupDrawSlotPanel
                     :active-group-position="activeGroupPosition"
@@ -170,8 +220,8 @@ const submit = () => {
 
                 <TournamentGroupDrawPlayerFields
                     v-if="
-                        activeGroupPosition
-                            && tournament.match_mode === 'singles'
+                        activeGroupPosition &&
+                        tournament.match_mode === 'singles'
                     "
                     :player-search="playerSearch"
                     :filtered-players="filteredAvailablePlayers"
@@ -193,8 +243,8 @@ const submit = () => {
 
                 <TournamentGroupDrawTeamFields
                     v-if="
-                        activeGroupPosition
-                            && tournament.match_mode === 'doubles'
+                        activeGroupPosition &&
+                        tournament.match_mode === 'doubles'
                     "
                     :team-search="teamSearch"
                     :filtered-teams="filteredAvailableTeams"

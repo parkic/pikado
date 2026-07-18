@@ -46,8 +46,6 @@ const publicRoutes = publicTournamentRoutes(
 );
 
 const {
-    startGroupDraw,
-    markReady,
     generateGroupMatches,
     completeGroupStage,
 } = useTournamentActions({
@@ -87,18 +85,12 @@ const {
             <template #actions>
                 <TournamentHeaderActions
                     :status="tournament.status"
-                    :can-start-group-draw="tournament.can_start_group_draw"
-                    :can-mark-ready="tournament.can_mark_ready"
                     :can-generate-group-matches="tournament.can_generate_group_matches"
-                    :can-complete-group-stage="tournament.can_complete_group_stage"
                     :public-enabled="tournament.public_enabled"
                     :tournaments-url="venueRoutes.index"
                     :public-url="publicRoutes.live"
                     :routes="routes"
-                    @start-group-draw="startGroupDraw"
-                    @mark-ready="markReady"
                     @generate-group-matches="generateGroupMatches"
-                    @complete-group-stage="completeGroupStage"
                 />
             </template>
         </PageHeader>
@@ -133,6 +125,7 @@ const {
             :status="tournament.status"
             :can-generate-group-matches="tournament.can_generate_group_matches"
             :can-complete-group-stage="tournament.can_complete_group_stage"
+            :group-draw-url="routes.groupDraw"
             :schedule-url="routes.schedule"
             :standings-url="routes.standings"
             :repechage-url="routes.repechage"

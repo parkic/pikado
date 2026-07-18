@@ -6,10 +6,7 @@ import type { TournamentStatus } from '@/types/tournament';
 
 defineProps<{
     status: TournamentStatus;
-    canStartGroupDraw: boolean;
-    canMarkReady: boolean;
     canGenerateGroupMatches: boolean;
-    canCompleteGroupStage: boolean;
     publicEnabled: boolean;
     tournamentsUrl: string;
     publicUrl: string;
@@ -17,10 +14,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-    'start-group-draw': [];
-    'mark-ready': [];
     'generate-group-matches': [];
-    'complete-group-stage': [];
 }>();
 </script>
 
@@ -33,39 +27,23 @@ const emit = defineEmits<{
     </Link>
 
     <Link
-        :href="routes.groupsSetup"
-        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-    >
-        Setup grupa
-    </Link>
-
-    <Link
+        v-if="status === 'draft'"
         :href="routes.groupDraw"
         class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
     >
-        Group Draw
+        Unesi učesnike
+    </Link>
+
+    <Link
+        v-else-if="status === 'group_draw'"
+        :href="routes.groupDraw"
+        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+    >
+        Nastavi unos učesnika
     </Link>
 
     <button
-        v-if="canStartGroupDraw && status === 'draft'"
-        type="button"
-        class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-        @click="emit('start-group-draw')"
-    >
-        Pokreni Group Draw
-    </button>
-
-    <button
-        v-if="canMarkReady && status !== 'ready'"
-        type="button"
-        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-        @click="emit('mark-ready')"
-    >
-        Označi kao spreman
-    </button>
-
-    <button
-        v-if="canGenerateGroupMatches"
+        v-else-if="status === 'ready' && canGenerateGroupMatches"
         type="button"
         class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
         @click="emit('generate-group-matches')"
@@ -73,56 +51,60 @@ const emit = defineEmits<{
         Generiši grupne mečeve
     </button>
 
-    <button
-        v-if="canCompleteGroupStage"
-        type="button"
+    <Link
+        v-else-if="status === 'ready'"
+        :href="routes.groupDraw"
         class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-        @click="emit('complete-group-stage')"
     >
-        Završi grupnu fazu
-    </button>
+        Pregled učesnika
+    </Link>
 
     <Link
+        v-else-if="status === 'group_stage'"
         :href="routes.schedule"
-        class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
+        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
     >
-        Raspored
+        Otvori raspored
+    </Link>
+
+    <Link
+        v-else-if="status === 'repechage'"
+        :href="routes.repechage"
+        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+    >
+        Otvori repasaž
+    </Link>
+
+    <Link
+        v-else-if="status === 'knockout_draw'"
+        :href="routes.knockout"
+        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+    >
+        Otvori nokaut
+    </Link>
+
+    <Link
+        v-else-if="status === 'knockout_stage'"
+        :href="routes.schedule"
+        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+    >
+        Otvori raspored
+    </Link>
+
+    <Link
+        v-else-if="status === 'finished'"
+        :href="routes.knockout"
+        class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+    >
+        Pogledaj završnicu
     </Link>
 
     <Link
         v-if="publicEnabled"
         :href="publicUrl"
         target="_blank"
-        class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:opacity-90"
+        class="inline-flex items-center justify-center rounded-lg border border-emerald-600/40 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-500/10 dark:text-emerald-300"
     >
-        Otvori public
-    </Link>
-
-    <Link
-        :href="routes.qualificationSetup"
-        class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-    >
-        Prolaz
-    </Link>
-
-    <Link
-        :href="routes.repechage"
-        class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-    >
-        Repasaž
-    </Link>
-
-    <Link
-        :href="routes.knockout"
-        class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-    >
-        Nokaut
-    </Link>
-
-    <Link
-        :href="routes.standings"
-        class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-    >
-        Tabela
+        Public prikaz
     </Link>
 </template>
