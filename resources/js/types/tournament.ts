@@ -419,3 +419,33 @@ export type TournamentKnockoutRound = {
     round_sort: number;
     series: TournamentKnockoutSeries[];
 };
+
+
+export type TournamentEditGroupDrawData = TournamentIdentity & {
+    match_mode: TournamentMatchMode;
+    match_mode_label: string;
+};
+
+export type TournamentEditGroupDrawParticipant = {
+    id: number;
+    participant_type: 'player' | 'team';
+    group_position: string | null;
+    display_name: string;
+    player: {
+        id: number;
+        first_name: string;
+        last_name: string;
+        nickname: string | null;
+    } | null;
+    team: {
+        id: number;
+        name: string;
+    } | null;
+};
+
+export type TournamentEditGroupDrawParticipantFormData = {
+    first_name: string;
+    last_name: string;
+    nickname: string;
+    team_name: string;
+};

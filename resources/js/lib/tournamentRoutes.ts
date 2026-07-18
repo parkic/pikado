@@ -1,10 +1,16 @@
-export const venueTournamentRoutes = (venueSlug: string) => {
-    const base = `/venues/${venueSlug}/tournaments`;
+export const venueTournamentRoutes = (
+    venueSlug: string,
+) => {
+    const venueBase = `/venues/${venueSlug}`;
+    const base = `${venueBase}/tournaments`;
 
     return {
+        dashboard: `${venueBase}/dashboard`,
         index: base,
         create: `${base}/create`,
         store: base,
+        show: (tournamentSlug: string) =>
+            `${base}/${tournamentSlug}`,
     };
 };
 

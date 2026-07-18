@@ -1,33 +1,22 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
 
-type Venue = {
-    id: number;
-    name: string;
-    slug: string;
-};
+import PageHeader from '@/components/shared/PageHeader.vue';
 
-type Tournament = {
-    id: number;
-    name: string;
-    slug: string;
-    public_code: string;
-    game_type: string;
-    game_type_label: string;
-    match_mode: string;
-    match_mode_label: string;
-    status: string;
-    status_label: string;
-    knockout_size: number | null;
-    public_enabled: boolean;
-    resources_count: number;
-    created_at: string | null;
-};
+import { venueTournamentRoutes } from '@/lib/tournamentRoutes';
 
-defineProps<{
-    venue: Venue;
-    tournaments: Tournament[];
+import type { TournamentListItem } from '@/types/tournament';
+import type { VenueSummary } from '@/types/venue';
+
+
+const props =defineProps<{
+    venue: VenueSummary;
+    tournaments: TournamentListItem[];
 }>();
+
+const routes = venueTournamentRoutes(
+    props.venue.slug,
+);
 
 defineOptions({
     layout: {
@@ -57,37 +46,27 @@ const statusBadgeClasses = (status: string): string => {
     <Head :title="`Turniri - ${venue.name}`" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
-        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-                <p class="text-sm text-muted-foreground">
-                    {{ venue.name }}
-                </p>
-
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight">
-                    Turniri
-                </h1>
-
-                <p class="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Lista turnira za ovaj lokal.
-                </p>
-            </div>
-
-            <div class="flex flex-col gap-2 sm:flex-row">
+        <PageHeader
+            :eyebrow="venue.name"
+            title="Turniri"
+            description="Lista turnira za ovaj lokal."
+        >
+            <template #actions>
                 <Link
-                    :href="`/venues/${venue.slug}/dashboard`"
+                    :href="routes.dashboard"
                     class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
                 >
                     Nazad na dashboard
                 </Link>
 
                 <Link
-                    :href="`/venues/${venue.slug}/tournaments/create`"
+                    :href="routes.create"
                     class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
                 >
                     Novi turnir
                 </Link>
-            </div>
-        </div>
+            </template>
+        </PageHeader>
 
         <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
             <div class="flex items-center justify-between gap-4">
@@ -190,7 +169,7 @@ const statusBadgeClasses = (status: string): string => {
                                 </td>
                                 <td class="px-4 py-3">
                                     <Link
-                                        :href="`/venues/${venue.slug}/tournaments/${tournament.slug}`"
+                                        :href="routes.show(tournament.slug)"
                                         class="text-sm font-medium text-primary hover:underline"
                                     >
                                         Otvori
