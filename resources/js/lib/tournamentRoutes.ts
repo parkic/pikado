@@ -33,7 +33,14 @@ export const tournamentRoutes = (
             `${base}/schedule/matches/${matchId}/resource`,
         scheduleMatchResult: (matchId: number) =>
             `${base}/schedule/matches/${matchId}/result`,
+
         standings: `${base}/standings`,
+        standingQualificationOverride: (participantId: number) =>
+            `${base}/standings/participants/${participantId}/qualification-override`,
+        standingParticipantWithdraw: (participantId: number) =>
+            `${base}/standings/participants/${participantId}/withdraw`,
+        standingParticipantRestore: (participantId: number) =>
+            `${base}/standings/participants/${participantId}/restore`,
 
         qualificationSetup: `${base}/qualification/setup`,
         repechage: `${base}/repechage`,

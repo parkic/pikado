@@ -281,3 +281,39 @@ export type TournamentScheduleResultForm = {
     score_b: string;
     winner_participant_id: string;
 };
+
+
+export type TournamentStandingsData = TournamentIdentity & {
+    status: TournamentStatus;
+    status_label: string;
+    can_manage_withdrawals: boolean;
+};
+
+export type TournamentStandingRow = {
+    participant_id: number;
+    group_position: string | null;
+    display_name: string;
+    played: number;
+    wins: number;
+    losses: number;
+    points_for: number;
+    points_against: number;
+    points_difference: number;
+    standing_points: number;
+    position: number | null;
+    participant_status: string;
+    is_withdrawn: boolean;
+    withdrawn_at: string | null;
+    qualification_status: string;
+    qualification_label: string;
+    qualification_override_status: string | null;
+    qualification_is_manual: boolean;
+};
+
+export type TournamentStandingGroup = {
+    id: number;
+    name: string;
+    matches_count: number;
+    finished_matches_count: number;
+    rows: TournamentStandingRow[];
+};
