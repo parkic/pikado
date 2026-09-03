@@ -28,16 +28,12 @@ defineOptions({
     },
 });
 
-const routes = tournamentRoutes(
-    props.venue.slug,
-    props.tournament.slug,
-);
+const routes = tournamentRoutes(props.venue.slug, props.tournament.slug);
 
 const form = useForm<TournamentQualificationFormData>({
     direct_qualifiers_per_group:
         props.tournament.settings.direct_qualifiers_per_group ?? 2,
-    repechage_enabled:
-        props.tournament.settings.repechage_enabled ?? true,
+    repechage_enabled: props.tournament.settings.repechage_enabled ?? true,
     repechage_participants_count:
         props.tournament.settings.repechage_participants_count ?? null,
     repechage_qualifiers_count:
@@ -81,20 +77,30 @@ const submit = () => {
                 @submit.prevent="submit"
             >
                 <TournamentQualificationSettingsFields
-                    :direct-qualifiers-per-group="form.direct_qualifiers_per_group"
+                    :direct-qualifiers-per-group="
+                        form.direct_qualifiers_per_group
+                    "
                     :repechage-enabled="form.repechage_enabled"
-                    :repechage-participants-count="form.repechage_participants_count"
-                    :repechage-qualifiers-count="form.repechage_qualifiers_count"
-                    :direct-qualifiers-error="form.errors.direct_qualifiers_per_group"
+                    :repechage-participants-count="
+                        form.repechage_participants_count
+                    "
+                    :repechage-qualifiers-count="
+                        form.repechage_qualifiers_count
+                    "
+                    :direct-qualifiers-error="
+                        form.errors.direct_qualifiers_per_group
+                    "
                     :repechage-enabled-error="form.errors.repechage_enabled"
-                    :repechage-participants-error="form.errors.repechage_participants_count"
-                    :repechage-qualifiers-error="form.errors.repechage_qualifiers_count"
+                    :repechage-participants-error="
+                        form.errors.repechage_participants_count
+                    "
+                    :repechage-qualifiers-error="
+                        form.errors.repechage_qualifiers_count
+                    "
                     @update:direct-qualifiers-per-group="
                         form.direct_qualifiers_per_group = $event
                     "
-                    @update:repechage-enabled="
-                        form.repechage_enabled = $event
-                    "
+                    @update:repechage-enabled="form.repechage_enabled = $event"
                     @update:repechage-participants-count="
                         form.repechage_participants_count = $event
                     "
@@ -126,7 +132,9 @@ const submit = () => {
                 :participants-count="tournament.participants_count"
                 :direct-qualifiers-per-group="form.direct_qualifiers_per_group"
                 :repechage-enabled="form.repechage_enabled"
-                :repechage-participants-count="form.repechage_participants_count"
+                :repechage-participants-count="
+                    form.repechage_participants_count
+                "
                 :repechage-qualifiers-count="form.repechage_qualifiers_count"
             />
         </div>

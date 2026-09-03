@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
+import { confirmAction } from '@/composables/useConfirmDialog';
 
 type Venue = {
     id: number;
@@ -11,6 +12,7 @@ type Resource = {
     id: number;
     name: string;
     type: string;
+    type_label: string;
     sort_order: number;
     is_active: boolean;
 };
@@ -20,8 +22,15 @@ const props = defineProps<{
     resources: Resource[];
 }>();
 
-const deleteResource = (resource: Resource) => {
-    if (!confirm(`Da li sigurno želiš da obrišeš resource "${resource.name}"?`)) {
+const deleteResource = async (resource: Resource) => {
+    if (
+        !(await confirmAction({
+            title: 'Obriši opremu?',
+            description: `${resource.name} više neće biti dostupna za nove turnire.`,
+            confirmLabel: 'Obriši opremu',
+            variant: 'destructive',
+        }))
+    ) {
         return;
     }
 
@@ -32,7 +41,7 @@ defineOptions({
     layout: {
         breadcrumbs: [
             {
-                title: 'Venue resources',
+                title: 'Oprema',
                 href: '#',
             },
         ],
@@ -41,21 +50,23 @@ defineOptions({
 </script>
 
 <template>
-    <Head :title="`${venue.name} Resources`" />
+    <Head :title="`${venue.name} - Oprema`" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div
+            class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+        >
             <div>
                 <p class="text-sm text-muted-foreground">
                     {{ venue.name }}
                 </p>
 
                 <h1 class="mt-1 text-2xl font-semibold tracking-tight">
-                    Resources lokala
+                    Oprema lokala
                 </h1>
 
                 <p class="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Default oprema lokala. Kasnije će se ovi resources kopirati u konkretan turnir.
+                    Table i stolovi koje možeš da uključiš u turnir.
                 </p>
             </div>
 
@@ -64,31 +75,78 @@ defineOptions({
                     :href="`/venues/${venue.slug}/dashboard`"
                     class="inline-flex items-center justify-center rounded-md border border-sidebar-border/70 px-4 py-2 text-sm font-medium hover:bg-muted dark:border-sidebar-border"
                 >
-                    Nazad na dashboard
+                    Nazad na početnu
                 </Link>
 
                 <Link
                     :href="`/venues/${venue.slug}/resources/create`"
                     class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                 >
-                    Dodaj resource
+                    Dodaj opremu
                 </Link>
             </div>
         </div>
 
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+        <div
+            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+        >
             <div
                 v-if="resources.length"
-                class="overflow-hidden rounded-lg border border-sidebar-border/70 dark:border-sidebar-border"
+                class="space-y-3 md:overflow-hidden md:rounded-lg md:border md:border-sidebar-border/70 md:dark:border-sidebar-border"
             >
-                <table class="w-full text-left text-sm">
-                    <thead class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border">
+                <div class="grid gap-3 md:hidden">
+                    <article
+                        v-for="resource in resources"
+                        :key="resource.id"
+                        class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="font-medium">{{ resource.name }}</p>
+                                <p class="mt-1 text-sm text-muted-foreground">
+                                    {{ resource.type_label }} · redosled
+                                    {{ resource.sort_order }}
+                                </p>
+                            </div>
+                            <span
+                                class="rounded-full bg-muted px-2 py-1 text-xs font-medium"
+                            >
+                                {{
+                                    resource.is_active ? 'Aktivna' : 'Neaktivna'
+                                }}
+                            </span>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-2 gap-2">
+                            <Link
+                                :href="`/venues/${venue.slug}/resources/${resource.id}/edit`"
+                                class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-3 py-2 text-sm font-medium dark:border-sidebar-border"
+                            >
+                                Izmeni
+                            </Link>
+                            <button
+                                type="button"
+                                class="inline-flex items-center justify-center rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 dark:border-red-900 dark:text-red-400"
+                                @click="deleteResource(resource)"
+                            >
+                                Obriši
+                            </button>
+                        </div>
+                    </article>
+                </div>
+
+                <table class="hidden w-full text-left text-sm md:table">
+                    <thead
+                        class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border"
+                    >
                         <tr>
                             <th class="px-4 py-3 font-medium">Naziv</th>
                             <th class="px-4 py-3 font-medium">Tip</th>
                             <th class="px-4 py-3 font-medium">Redosled</th>
                             <th class="px-4 py-3 font-medium">Status</th>
-                            <th class="px-4 py-3 text-right font-medium">Akcije</th>
+                            <th class="px-4 py-3 text-right font-medium">
+                                Akcije
+                            </th>
                         </tr>
                     </thead>
 
@@ -103,7 +161,7 @@ defineOptions({
                             </td>
 
                             <td class="px-4 py-3 text-muted-foreground">
-                                {{ resource.type }}
+                                {{ resource.type_label }}
                             </td>
 
                             <td class="px-4 py-3 text-muted-foreground">
@@ -153,7 +211,7 @@ defineOptions({
                 v-else
                 class="rounded-lg border border-dashed border-sidebar-border/70 p-4 text-sm text-muted-foreground dark:border-sidebar-border"
             >
-                Ovaj lokal još nema resources.
+                Ovaj lokal još nema dodatu opremu.
             </div>
         </div>
     </div>

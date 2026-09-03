@@ -8,17 +8,11 @@ export type TournamentStatus =
     | 'knockout_stage'
     | 'finished';
 
-export type TournamentGroupRounds =
-    | 'single'
-    | 'double';
+export type TournamentGroupRounds = 'single' | 'double';
 
-export type TournamentMatchMode =
-    | 'singles'
-    | 'doubles';
+export type TournamentMatchMode = 'singles' | 'doubles';
 
-export type TournamentNextStageAfterGroups =
-    | 'repechage'
-    | 'knockout_draw';
+export type TournamentNextStageAfterGroups = 'repechage' | 'knockout_draw';
 
 export type TournamentIdentity = {
     id: number;
@@ -58,6 +52,7 @@ export type TournamentGroupParticipant = {
     status: string;
     display_name: string;
     can_replace?: boolean;
+    can_remove?: boolean;
 };
 
 export type TournamentGroup = {
@@ -84,6 +79,7 @@ export type TournamentPodiumData = {
 };
 
 export type TournamentShowData = TournamentIdentity & {
+    tournament_date: string | null;
     public_code: string;
     game_type: string;
     game_type_label: string;
@@ -109,6 +105,7 @@ export type TournamentShowData = TournamentIdentity & {
     can_start_group_draw: boolean;
     can_mark_ready: boolean;
     can_generate_group_matches: boolean;
+    can_delete: boolean;
     podium: TournamentPodiumData;
     resources: TournamentResource[];
 };
@@ -126,6 +123,7 @@ export type TournamentFormOption = {
 };
 
 export type TournamentCreateOptions = {
+    default_date: string;
     game_types: TournamentFormOption[];
     match_modes: TournamentFormOption[];
     group_rounds: TournamentFormOption[];
@@ -142,6 +140,7 @@ export type TournamentSelectableResource = {
 
 export type TournamentCreateFormData = {
     name: string;
+    tournament_date: string;
     game_type: string;
     match_mode: TournamentMatchMode;
     group_rounds: TournamentGroupRounds;
@@ -213,6 +212,7 @@ export type TournamentGroupDrawData = TournamentIdentity & {
     total_slots: number;
     next_slot: TournamentGroupDrawNextSlot | null;
     groups: TournamentGroup[];
+    can_manage_withdrawals: boolean;
 };
 
 export type TournamentGroupDrawFormData = {
@@ -227,7 +227,7 @@ export type TournamentGroupDrawFormData = {
     /**
      * Backend validaciona greška za izabrani slot.
      * Nije stvarno polje koje unosimo u formu.
-    */
+     */
     slot?: string;
     participant?: string;
 };
@@ -237,14 +237,26 @@ export type TournamentScheduleData = TournamentIdentity & {
     status_label: string;
     matches_count: number;
     group_matches_count: number;
+    completed_group_matches_count: number;
+    finished_matches_count: number;
+    can_complete_group_stage: boolean;
+    next_stage_after_groups: TournamentNextStageAfterGroups;
+    repechage_enabled: boolean;
 };
 
 export type TournamentScheduleParticipant = {
     id: number;
     group_position: string | null;
+    qualification_position: string | null;
     display_name: string;
     status: string;
     is_withdrawn: boolean;
+    withdrawal_policy: string | null;
+    score_suggestion: {
+        average: number;
+        median: number;
+        matches_count: number;
+    } | null;
 };
 
 export type TournamentScheduleMatchResource = {
@@ -283,6 +295,8 @@ export type TournamentScheduleMatch = {
     winner: TournamentScheduleWinner | null;
     status: string;
     status_label: string;
+    live_queue: 'current' | 'next' | null;
+    live_queue_order: number | null;
     resource: TournamentScheduleMatchResource | null;
 };
 
@@ -292,16 +306,17 @@ export type TournamentScheduleResultForm = {
     winner_participant_id: string;
 };
 
-
 export type TournamentStandingsData = TournamentIdentity & {
     status: TournamentStatus;
     status_label: string;
     can_manage_withdrawals: boolean;
+    repechage_enabled: boolean;
 };
 
 export type TournamentStandingRow = {
     participant_id: number;
     group_position: string | null;
+    qualification_position: string | null;
     display_name: string;
     played: number;
     wins: number;
@@ -314,6 +329,7 @@ export type TournamentStandingRow = {
     participant_status: string;
     is_withdrawn: boolean;
     withdrawn_at: string | null;
+    withdrawal_policy: string | null;
     qualification_status: string;
     qualification_label: string;
     qualification_override_status: string | null;
@@ -341,7 +357,7 @@ export type TournamentRepechageData = TournamentIdentity & {
 export type TournamentRepechageParticipant = {
     participant_id: number;
     group_name: string;
-    group_position: string | null;
+    qualification_position: string | null;
     group_rank: number;
     display_name: string;
     played: number;
@@ -355,7 +371,6 @@ export type TournamentRepechageParticipant = {
     repechage_outcome_label: string;
 };
 
-
 export type TournamentKnockoutData = TournamentIdentity & {
     status: TournamentStatus;
     status_label: string;
@@ -366,13 +381,49 @@ export type TournamentKnockoutData = TournamentIdentity & {
     is_knockout_ready: boolean;
     knockout_matches_count: number;
     can_generate_knockout_bracket: boolean;
+    repechage_enabled: boolean;
+};
+
+export type TournamentKnockoutDrawParticipant = {
+    participant_id: number;
+    display_name: string;
+    group_name: string;
+    group_rank: number;
+    qualification_position: string | null;
+    standing_points: number;
+    wins: number;
+    points_difference: number;
+    seed: number;
+};
+
+export type TournamentKnockoutDrawSlot = {
+    position: number;
+    seeded: TournamentKnockoutDrawParticipant | null;
+    unseeded: TournamentKnockoutDrawParticipant | null;
+};
+
+export type TournamentKnockoutDraw = {
+    enabled: boolean;
+    started: boolean;
+    complete: boolean;
+    phase: 'seeded' | 'unseeded' | 'complete';
+    seeded_count: number;
+    can_customize_seeding: boolean;
+    seeded: TournamentKnockoutDrawParticipant[];
+    unseeded: TournamentKnockoutDrawParticipant[];
+    drawn_seeded_ids: number[];
+    drawn_unseeded_ids: number[];
+    latest_participant: TournamentKnockoutDrawParticipant | null;
+    slots: TournamentKnockoutDrawSlot[];
+    remaining_count: number;
+    can_manage?: boolean;
 };
 
 export type TournamentKnockoutParticipant = {
     seed: number;
     participant_id: number;
     group_name: string;
-    group_position: string | null;
+    qualification_position: string | null;
     group_rank: number;
     display_name: string;
     played: number;
@@ -389,7 +440,7 @@ export type TournamentKnockoutParticipant = {
 export type TournamentKnockoutSeriesParticipant = {
     id: number;
     display_name: string;
-    group_position: string | null;
+    qualification_position: string | null;
     status: string;
     is_withdrawn: boolean;
 };
@@ -430,7 +481,6 @@ export type TournamentKnockoutRound = {
     series: TournamentKnockoutSeries[];
 };
 
-
 export type TournamentEditGroupDrawData = TournamentIdentity & {
     match_mode: TournamentMatchMode;
     match_mode_label: string;
@@ -468,8 +518,8 @@ export type TournamentReplaceGroupDrawParticipant = {
     display_name: string;
 };
 
-
 export type TournamentListItem = TournamentIdentity & {
+    tournament_date: string | null;
     public_code: string;
     game_type: string;
     game_type_label: string;
@@ -480,5 +530,9 @@ export type TournamentListItem = TournamentIdentity & {
     knockout_size: number | null;
     public_enabled: boolean;
     resources_count: number;
+    participants_count: number;
+    matches_count: number;
+    finished_matches_count: number;
+    can_delete: boolean;
     created_at: string | null;
 };

@@ -12,20 +12,18 @@ const props = defineProps<{
 
 const repechagePerGroup = computed<number | null>(() => {
     if (
-        !props.repechageEnabled
-        || !props.repechageParticipantsCount
-        || props.groupsCount <= 0
+        !props.repechageEnabled ||
+        !props.repechageParticipantsCount ||
+        props.groupsCount <= 0
     ) {
         return null;
     }
 
-    const participantsCount = Number(
-        props.repechageParticipantsCount,
-    );
+    const participantsCount = Number(props.repechageParticipantsCount);
 
     if (
-        !Number.isFinite(participantsCount)
-        || participantsCount % props.groupsCount !== 0
+        !Number.isFinite(participantsCount) ||
+        participantsCount % props.groupsCount !== 0
     ) {
         return null;
     }
@@ -35,16 +33,14 @@ const repechagePerGroup = computed<number | null>(() => {
 </script>
 
 <template>
-    <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-        <h2 class="text-lg font-medium">
-            Pregled
-        </h2>
+    <div
+        class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+    >
+        <h2 class="text-lg font-medium">Pregled</h2>
 
         <div class="mt-4 space-y-3 text-sm">
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Grupe
-                </span>
+                <span class="text-muted-foreground"> Grupe </span>
 
                 <span class="font-medium">
                     {{ groupsCount }}
@@ -52,9 +48,7 @@ const repechagePerGroup = computed<number | null>(() => {
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Učesnici
-                </span>
+                <span class="text-muted-foreground"> Učesnici </span>
 
                 <span class="font-medium">
                     {{ participantsCount }}
@@ -62,9 +56,7 @@ const repechagePerGroup = computed<number | null>(() => {
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Direktno po grupi
-                </span>
+                <span class="text-muted-foreground"> Direktno po grupi </span>
 
                 <span class="font-medium">
                     {{ directQualifiersPerGroup }}
@@ -72,9 +64,7 @@ const repechagePerGroup = computed<number | null>(() => {
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Repasaž
-                </span>
+                <span class="text-muted-foreground"> Repasaž </span>
 
                 <span class="font-medium">
                     {{ repechageEnabled ? 'Da' : 'Ne' }}
@@ -82,9 +72,7 @@ const repechagePerGroup = computed<number | null>(() => {
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Ukupno u repasažu
-                </span>
+                <span class="text-muted-foreground"> Ukupno u repasažu </span>
 
                 <span class="font-medium">
                     {{ repechageParticipantsCount ?? '-' }}
@@ -92,9 +80,7 @@ const repechagePerGroup = computed<number | null>(() => {
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Repasaž po grupi
-                </span>
+                <span class="text-muted-foreground"> Repasaž po grupi </span>
 
                 <span class="font-medium">
                     {{ repechagePerGroup ?? '-' }}
@@ -102,9 +88,7 @@ const repechagePerGroup = computed<number | null>(() => {
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Iz repasaža dalje
-                </span>
+                <span class="text-muted-foreground"> Iz repasaža dalje </span>
 
                 <span class="font-medium">
                     {{ repechageQualifiersCount ?? '-' }}
@@ -112,9 +96,11 @@ const repechagePerGroup = computed<number | null>(() => {
             </div>
         </div>
 
-        <div class="mt-5 rounded-lg border border-sidebar-border/70 p-3 text-sm text-muted-foreground dark:border-sidebar-border">
-            Primer za grupu od 4 učesnika i 2 direktna prolaza:
-            prva 2 imaju status Direktan prolaz, ostali Repasaž ili Ispao.
+        <div
+            class="mt-5 rounded-lg border border-sidebar-border/70 p-3 text-sm text-muted-foreground dark:border-sidebar-border"
+        >
+            Primer za grupu od 4 učesnika i 2 direktna prolaza: prva 2 imaju
+            status Direktan prolaz, ostali Repasaž ili Ispao.
         </div>
     </div>
 </template>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 
 import PageHeader from '@/components/shared/PageHeader.vue';
+import TournamentAdminNav from '@/components/tournaments/TournamentAdminNav.vue';
 import TournamentRepechageOverview from '@/components/tournaments/TournamentRepechageOverview.vue';
 import TournamentRepechageParticipants from '@/components/tournaments/TournamentRepechageParticipants.vue';
 
@@ -33,21 +34,13 @@ defineOptions({
     },
 });
 
-const routes = tournamentRoutes(
-    props.venue.slug,
-    props.tournament.slug,
-);
+const routes = tournamentRoutes(props.venue.slug, props.tournament.slug);
 
-const {
-    updateRepechageOutcome,
-    completeRepechage,
-} = useTournamentRepechageActions({
-    participantOutcomeUrl:
-        routes.repechageParticipantOutcome,
-    completeRepechageUrl:
-        routes.completeRepechage,
-});
-
+const { updateRepechageOutcome, completeRepechage } =
+    useTournamentRepechageActions({
+        participantOutcomeUrl: routes.repechageParticipantOutcome,
+        completeRepechageUrl: routes.completeRepechage,
+    });
 </script>
 
 <template>
@@ -68,36 +61,20 @@ const {
                 >
                     Završi repasaž
                 </button>
-
-                <Link
-                    :href="routes.standings"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Tabela
-                </Link>
-
-                <Link
-                    :href="routes.knockout"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Nokaut
-                </Link>
-
-                <Link
-                    :href="routes.show"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Nazad na turnir
-                </Link>
             </template>
         </PageHeader>
+
+        <TournamentAdminNav
+            active="repechage"
+            :routes="routes"
+            :status="tournament.status"
+            :repechage-enabled="true"
+        />
 
         <TournamentRepechageOverview
             :tournament="tournament"
             :direct-qualifiers-count="direct_qualifiers.length"
-            :repechage-participants-count="
-                repechage_participants.length
-            "
+            :repechage-participants-count="repechage_participants.length"
             @complete="completeRepechage"
         />
 
@@ -107,6 +84,5 @@ const {
             :eliminated-participants="eliminated_participants"
             @update-outcome="updateRepechageOutcome"
         />
-
     </div>
 </template>

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue';
+
+const props = defineProps<{
     gameTypeLabel: string;
     matchModeLabel: string;
     groupsCount: number;
@@ -9,77 +11,62 @@ defineProps<{
     finishedGroupMatchesCount: number;
     resourcesCount: number;
 }>();
+
+const progress = computed(() => {
+    if (props.groupMatchesCount < 1) {
+        return 0;
+    }
+
+    return Math.round(
+        (props.finishedGroupMatchesCount / props.groupMatchesCount) * 100,
+    );
+});
 </script>
 
 <template>
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-            <p class="text-sm text-muted-foreground">
-                Igra
-            </p>
-
-            <p class="mt-2 text-lg font-medium">
-                {{ gameTypeLabel }}
-            </p>
-        </div>
-
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-            <p class="text-sm text-muted-foreground">
-                Format
-            </p>
-
-            <p class="mt-2 text-lg font-medium">
-                {{ matchModeLabel }}
+    <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div
+            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+        >
+            <p class="text-xs text-muted-foreground">Format</p>
+            <p class="mt-2 text-lg font-semibold">
+                {{ gameTypeLabel }} · {{ matchModeLabel }}
             </p>
         </div>
 
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-            <p class="text-sm text-muted-foreground">
-                Grupe
-            </p>
-
-            <p class="mt-2 text-lg font-medium">
-                {{ groupsCount }}
-            </p>
-        </div>
-
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-            <p class="text-sm text-muted-foreground">
-                Učesnici
-            </p>
-
-            <p class="mt-2 text-lg font-medium">
+        <div
+            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+        >
+            <p class="text-xs text-muted-foreground">Učesnici</p>
+            <p class="mt-2 text-lg font-semibold">
                 {{ participantsCount }} / {{ totalSlots }}
             </p>
         </div>
 
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-            <p class="text-sm text-muted-foreground">
-                Grupni mečevi
-            </p>
-
-            <p class="mt-2 text-lg font-medium">
-                {{ groupMatchesCount }}
-            </p>
-        </div>
-
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-            <p class="text-sm text-muted-foreground">
-                Završeni grupni
-            </p>
-
-            <p class="mt-2 text-lg font-medium">
+        <div
+            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+        >
+            <div class="flex items-center justify-between gap-2">
+                <p class="text-xs text-muted-foreground">Grupni mečevi</p>
+                <span class="text-xs font-medium">{{ progress }}%</span>
+            </div>
+            <p class="mt-2 text-lg font-semibold">
                 {{ finishedGroupMatchesCount }} / {{ groupMatchesCount }}
             </p>
+            <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                    class="h-full rounded-full bg-primary"
+                    :style="{ width: `${progress}%` }"
+                />
+            </div>
         </div>
 
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-            <p class="text-sm text-muted-foreground">
-                Resources
-            </p>
-
-            <p class="mt-2 text-lg font-medium">
-                {{ resourcesCount }}
+        <div
+            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+        >
+            <p class="text-xs text-muted-foreground">Postavka</p>
+            <p class="mt-2 text-lg font-semibold">
+                {{ groupsCount }} grupa · {{ resourcesCount }} komada opreme
             </p>
         </div>
     </div>

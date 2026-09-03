@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 
 import PageHeader from '@/components/shared/PageHeader.vue';
+import TournamentAdminNav from '@/components/tournaments/TournamentAdminNav.vue';
 import TournamentGroupDrawGroupsPreview from '@/components/tournaments/TournamentGroupDrawGroupsPreview.vue';
 import TournamentGroupDrawPlayerFields from '@/components/tournaments/TournamentGroupDrawPlayerFields.vue';
 import TournamentGroupDrawSlotPanel from '@/components/tournaments/TournamentGroupDrawSlotPanel.vue';
@@ -11,6 +12,7 @@ import TournamentGroupDrawSubmitButton from '@/components/tournaments/Tournament
 import TournamentGroupDrawTeamFields from '@/components/tournaments/TournamentGroupDrawTeamFields.vue';
 import TournamentGroupDrawUnavailablePanel from '@/components/tournaments/TournamentGroupDrawUnavailablePanel.vue';
 
+import { confirmAction } from '@/composables/useConfirmDialog';
 import { useTournamentGroupDrawParticipantRemoval } from '@/composables/useTournamentGroupDrawParticipantRemoval';
 import { useTournamentGroupDrawSearch } from '@/composables/useTournamentGroupDrawSearch';
 import { useTournamentGroupDrawSlots } from '@/composables/useTournamentGroupDrawSlots';
@@ -19,6 +21,7 @@ import { tournamentRoutes } from '@/lib/tournamentRoutes';
 import type {
     TournamentGroupDrawData,
     TournamentGroupDrawFormData,
+    TournamentGroupParticipant,
     TournamentGroupDrawPlayer,
     TournamentGroupDrawTeam,
 } from '@/types/tournament';
@@ -35,7 +38,7 @@ defineOptions({
     layout: {
         breadcrumbs: [
             {
-                title: 'Group Draw',
+                title: 'Unos učesnika',
                 href: '#',
             },
         ],
@@ -43,10 +46,62 @@ defineOptions({
 });
 
 const routes = tournamentRoutes(props.venue.slug, props.tournament.slug);
+const canManageRoster = [
+    'draft',
+    'group_draw',
+    'ready',
+    'group_stage',
+].includes(props.tournament.status);
+const canManageWithdrawals =
+    props.tournament.status === 'group_stage' &&
+    props.tournament.can_manage_withdrawals;
 
 const { removeParticipant } = useTournamentGroupDrawParticipantRemoval({
     participantDeleteUrl: routes.groupDrawParticipant,
 });
+
+const withdrawParticipant = async (participant: TournamentGroupParticipant) => {
+    const confirmed = await confirmAction({
+        title: 'Označi učesnika kao odustalog?',
+        description: `${participant.display_name} više neće biti aktivan, a njegovi grupni mečevi biće anulirani za tabelu.`,
+        confirmLabel: 'Označi kao odustao',
+        variant: 'destructive',
+    });
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.patch(
+        routes.standingParticipantWithdraw(participant.id),
+        {},
+        {
+            preserveScroll: true,
+            preserveState: false,
+        },
+    );
+};
+
+const restoreParticipant = async (participant: TournamentGroupParticipant) => {
+    const confirmed = await confirmAction({
+        title: 'Vrati učesnika u turnir?',
+        description: `${participant.display_name} će ponovo biti aktivan, a njegovi grupni mečevi vraćeni na prethodni status.`,
+        confirmLabel: 'Vrati učesnika',
+    });
+
+    if (!confirmed) {
+        return;
+    }
+
+    router.patch(
+        routes.standingParticipantRestore(participant.id),
+        {},
+        {
+            preserveScroll: true,
+            preserveState: false,
+        },
+    );
+};
 
 const form = useForm<TournamentGroupDrawFormData>({
     existing_player_id: null,
@@ -62,8 +117,7 @@ type FinishParticipantEntryFormData = {
     status?: string;
 };
 
-const finishParticipantEntryForm =
-    useForm<FinishParticipantEntryFormData>({});
+const finishParticipantEntryForm = useForm<FinishParticipantEntryFormData>({});
 
 const {
     groupSize,
@@ -120,12 +174,12 @@ const finishParticipantEntry = () => {
 </script>
 
 <template>
-    <Head :title="`Group Draw - ${tournament.name}`" />
+    <Head :title="`Unos učesnika - ${tournament.name}`" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
         <PageHeader
             :eyebrow="venue.name"
-            title="Group Draw"
+            title="Unos učesnika"
             description="Unos učesnika redom po slotovima: A1, B1, C1... pa A2, B2, C2..."
         >
             <template #actions>
@@ -140,10 +194,17 @@ const finishParticipantEntry = () => {
                     :href="routes.groupsSetup"
                     class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
                 >
-                    Setup grupa
+                    Podesi grupe
                 </Link>
             </template>
         </PageHeader>
+
+        <TournamentAdminNav
+            active="participants"
+            :routes="routes"
+            :status="tournament.status"
+            :repechage-enabled="tournament.settings.repechage_enabled"
+        />
 
         <TournamentGroupDrawStats
             :tournament-name="tournament.name"
@@ -158,6 +219,23 @@ const finishParticipantEntry = () => {
             :tournament-url="routes.show"
             :groups-setup-url="routes.groupsSetup"
         />
+
+        <div
+            v-if="
+                tournament.status === 'group_stage' &&
+                hasGroupSetup &&
+                !isGroupDrawComplete
+            "
+            class="rounded-xl border border-sky-500/25 bg-sky-500/5 p-4"
+        >
+            <h2 class="font-medium text-sky-700 dark:text-sky-200">
+                Kasni dolazak učesnika
+            </h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+                Izaberi slobodno mesto i dodaj učesnika. Njegovi rezervisani
+                mečevi će se automatski pojaviti u postojećem rasporedu.
+            </p>
+        </div>
 
         <div
             v-if="
@@ -210,7 +288,7 @@ const finishParticipantEntry = () => {
 
         <div class="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
             <form
-                v-if="!isGroupDrawComplete && hasGroupSetup"
+                v-if="canManageRoster && !isGroupDrawComplete && hasGroupSetup"
                 class="rounded-xl border border-sidebar-border/70 p-4 xl:sticky xl:top-4 xl:self-start dark:border-sidebar-border"
                 @submit.prevent="submit"
             >
@@ -273,16 +351,21 @@ const finishParticipantEntry = () => {
                 v-else
                 :is-complete="isGroupDrawComplete"
                 :has-group-setup="hasGroupSetup"
+                :can-manage-roster="canManageRoster"
                 :groups-setup-url="routes.groupsSetup"
             />
 
             <TournamentGroupDrawGroupsPreview
                 :groups="tournament.groups"
                 :group-size="groupSize"
+                :can-manage-roster="canManageRoster"
+                :can-manage-withdrawals="canManageWithdrawals"
                 :participant-edit-url="routes.groupDrawParticipantEdit"
                 :participant-replace-url="routes.groupDrawParticipantReplace"
                 @select-slot="selectSlot"
                 @remove-participant="removeParticipant"
+                @withdraw-participant="withdrawParticipant"
+                @restore-participant="restoreParticipant"
             />
         </div>
     </div>

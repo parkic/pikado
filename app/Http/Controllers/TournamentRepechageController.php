@@ -2,17 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tournament;
-use App\Models\Venue;
-use App\Models\TournamentParticipant;
-use App\Services\GroupStandingsCalculator;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use Inertia\Response;
 use App\Enums\RepechageOutcomeStatus;
 use App\Enums\TournamentStatus;
+use App\Events\TournamentLiveUpdated;
+use App\Models\Tournament;
+use App\Models\TournamentParticipant;
+use App\Models\Venue;
+use App\Services\GroupStandingsCalculator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class TournamentRepechageController extends Controller
 {
@@ -84,6 +85,12 @@ class TournamentRepechageController extends Controller
         abort_unless($tournament->venue_id === $venue->id, 404);
         abort_unless($participant->tournament_id === $tournament->id, 404);
 
+        if ($tournament->status !== TournamentStatus::REPECHAGE) {
+            return back()->withErrors([
+                'repechage_outcome_status' => 'Ishod repasaža može da se menja samo dok je repasaž u toku.',
+            ]);
+        }
+
         $validated = $request->validate([
             'repechage_outcome_status' => [
                 'nullable',
@@ -137,6 +144,8 @@ class TournamentRepechageController extends Controller
             'repechage_outcome_status' => $newStatus,
         ]);
 
+        event(new TournamentLiveUpdated($tournament->fresh(), 'repechage_outcome_updated'));
+
         return back()->with('success', 'Ishod repasaža je sačuvan.');
     }
 
@@ -176,6 +185,8 @@ class TournamentRepechageController extends Controller
             'status' => TournamentStatus::KNOCKOUT_DRAW,
         ]);
 
+        event(new TournamentLiveUpdated($tournament->fresh(), 'repechage_completed'));
+
         return redirect()
             ->route('venues.tournaments.show', [$venue, $tournament])
             ->with('success', 'Repasaž je završen. Turnir je spreman za nokaut žreb.');
@@ -190,7 +201,7 @@ class TournamentRepechageController extends Controller
                     ->map(fn (array $row) => [
                         'participant_id' => $row['participant_id'],
                         'group_name' => $group['name'],
-                        'group_position' => $row['group_position'],
+                        'qualification_position' => $row['qualification_position'],
                         'group_rank' => $row['position'],
                         'display_name' => $row['display_name'],
                         'played' => $row['played'],

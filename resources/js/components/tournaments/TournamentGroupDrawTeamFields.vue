@@ -40,10 +40,10 @@ const updateTeamName = (event: Event) => {
             <input
                 :value="teamSearch"
                 type="text"
-                class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm transition outline-none focus:border-primary dark:border-sidebar-border"
                 placeholder="Kucaj naziv ekipe..."
                 @input="updateTeamSearch"
-            >
+            />
 
             <div
                 v-if="teamSearch && filteredTeams.length"
@@ -61,15 +61,11 @@ const updateTeamName = (event: Event) => {
             </div>
 
             <div
-                v-if="
-                    teamSearch
-                        && !filteredTeams.length
-                        && !selectedTeam
-                "
+                v-if="teamSearch && !filteredTeams.length && !selectedTeam"
                 class="mt-2 rounded-lg border border-dashed border-sidebar-border/70 p-3 text-sm text-muted-foreground dark:border-sidebar-border"
             >
-                Nema pronađenih ekipa. Nastavi ručni unos ispod i
-                napravićemo novu ekipu.
+                Nema pronađenih ekipa. Nastavi ručni unos ispod i napravićemo
+                novu ekipu.
             </div>
 
             <div
@@ -90,31 +86,23 @@ const updateTeamName = (event: Event) => {
                 </button>
             </div>
 
-            <p
-                v-if="existingTeamIdError"
-                class="mt-1 text-sm text-red-600"
-            >
+            <p v-if="existingTeamIdError" class="mt-1 text-sm text-red-600">
                 {{ existingTeamIdError }}
             </p>
         </div>
 
         <div>
-            <label class="text-sm font-medium">
-                Naziv ekipe
-            </label>
+            <label class="text-sm font-medium"> Naziv ekipe </label>
 
             <input
                 :value="teamName"
                 type="text"
-                class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
+                class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm transition outline-none focus:border-primary dark:border-sidebar-border"
                 placeholder="SB22"
                 @input="updateTeamName"
-            >
+            />
 
-            <p
-                v-if="teamNameError"
-                class="mt-1 text-sm text-red-600"
-            >
+            <p v-if="teamNameError" class="mt-1 text-sm text-red-600">
                 {{ teamNameError }}
             </p>
         </div>

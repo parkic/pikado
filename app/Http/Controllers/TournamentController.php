@@ -7,10 +7,16 @@ use App\Enums\GroupRounds;
 use App\Enums\MatchMode;
 use App\Enums\MatchStage;
 use App\Enums\MatchStatus;
+use App\Enums\ParticipantStatus;
 use App\Enums\ScoringMode;
 use App\Enums\TournamentStatus;
-use App\Enums\ParticipantStatus;
-
+use App\Models\Tournament;
+use App\Models\TournamentGroup;
+use App\Models\TournamentMatch;
+use App\Models\TournamentParticipant;
+use App\Models\TournamentResource;
+use App\Models\Venue;
+use App\Services\GroupMatchGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,15 +24,6 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
-
-use App\Services\GroupMatchGenerator;
-
-use App\Models\Tournament;
-use App\Models\TournamentResource;
-use App\Models\Venue;
-use App\Models\TournamentGroup;
-use App\Models\TournamentParticipant;
-use App\Models\TournamentMatch;
 
 class TournamentController extends Controller
 {
@@ -36,13 +33,22 @@ class TournamentController extends Controller
 
         abort_unless($user->canAccessVenue($venue), 403);
 
+        $canDeleteTournament = $user->canAdministerVenue($venue);
+
         $tournaments = $venue->tournaments()
-            ->withCount('resources')
+            ->withCount([
+                'resources',
+                'participants',
+                'matches',
+                'matches as finished_matches_count' => fn ($query) => $query
+                    ->where('status', MatchStatus::FINISHED->value),
+            ])
             ->latest()
             ->get()
-            ->map(fn(Tournament $tournament) => [
+            ->map(fn (Tournament $tournament) => [
                 'id' => $tournament->id,
                 'name' => $tournament->name,
+                'tournament_date' => $tournament->tournament_date?->format('d.m.Y.'),
                 'slug' => $tournament->slug,
                 'public_code' => $tournament->public_code,
                 'game_type' => $tournament->game_type->value,
@@ -54,6 +60,10 @@ class TournamentController extends Controller
                 'knockout_size' => $tournament->knockout_size,
                 'public_enabled' => $tournament->public_enabled,
                 'resources_count' => $tournament->resources_count,
+                'participants_count' => $tournament->participants_count,
+                'matches_count' => $tournament->matches_count,
+                'finished_matches_count' => $tournament->finished_matches_count,
+                'can_delete' => $canDeleteTournament,
                 'created_at' => $tournament->created_at?->format('d.m.Y. H:i'),
             ]);
 
@@ -78,7 +88,7 @@ class TournamentController extends Controller
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
-            ->map(fn($resource) => [
+            ->map(fn ($resource) => [
                 'id' => $resource->id,
                 'name' => $resource->name,
                 'type' => $resource->type->value,
@@ -94,6 +104,7 @@ class TournamentController extends Controller
             ],
             'resources' => $resources,
             'options' => [
+                'default_date' => now()->toDateString(),
                 'game_types' => [
                     ['value' => GameType::DART_301->value, 'label' => '301'],
                     ['value' => GameType::DART_501->value, 'label' => '501'],
@@ -110,7 +121,10 @@ class TournamentController extends Controller
                 ],
                 'knockout_sizes' => [
                     ['value' => 8, 'label' => 'Top 8'],
+                    ['value' => 12, 'label' => 'Top 12'],
                     ['value' => 16, 'label' => 'Top 16'],
+                    ['value' => 20, 'label' => 'Top 20'],
+                    ['value' => 24, 'label' => 'Top 24'],
                     ['value' => 32, 'label' => 'Top 32'],
                 ],
             ],
@@ -126,13 +140,13 @@ class TournamentController extends Controller
 
         $tournament->load([
             'createdBy',
-            'resources' => fn($query) => $query
+            'resources' => fn ($query) => $query
                 ->orderBy('sort_order')
                 ->orderBy('name'),
-            'groups' => fn($query) => $query
+            'groups' => fn ($query) => $query
                 ->orderBy('sort_order')
                 ->orderBy('name'),
-            'groups.participants' => fn($query) => $query
+            'groups.participants' => fn ($query) => $query
                 ->orderBy('group_position')
                 ->orderBy('id'),
             'groups.participants.player',
@@ -142,9 +156,9 @@ class TournamentController extends Controller
         $tournament->loadCount([
             'groups',
             'participants',
-            'matches as group_matches_count' => fn($query) => $query
+            'matches as group_matches_count' => fn ($query) => $query
                 ->where('stage', MatchStage::GROUP->value),
-            'matches as finished_group_matches_count' => fn($query) => $query
+            'matches as finished_group_matches_count' => fn ($query) => $query
                 ->where('stage', MatchStage::GROUP->value)
                 ->where('status', MatchStatus::FINISHED->value),
         ]);
@@ -162,6 +176,7 @@ class TournamentController extends Controller
             'tournament' => [
                 'id' => $tournament->id,
                 'name' => $tournament->name,
+                'tournament_date' => $tournament->tournament_date?->format('d.m.Y.'),
                 'slug' => $tournament->slug,
                 'public_code' => $tournament->public_code,
                 'game_type' => $tournament->game_type->value,
@@ -186,13 +201,14 @@ class TournamentController extends Controller
                 'can_mark_ready' => $this->canMarkReady($tournament),
                 'can_generate_group_matches' => $this->canGenerateGroupMatches($tournament),
                 'can_complete_group_stage' => $this->canCompleteGroupStage($tournament),
+                'can_delete' => $user->canAdministerVenue($venue),
                 'next_stage_after_groups' => $this->nextStageAfterGroups($tournament),
                 'podium' => $podium,
-                'groups' => $tournament->groups->map(fn(TournamentGroup $group) => [
+                'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
                     'sort_order' => $group->sort_order,
-                    'participants' => $group->participants->map(fn(TournamentParticipant $participant) => [
+                    'participants' => $group->participants->map(fn (TournamentParticipant $participant) => [
                         'id' => $participant->id,
                         'participant_type' => $participant->participant_type->value,
                         'group_position' => $participant->group_position,
@@ -200,7 +216,7 @@ class TournamentController extends Controller
                         'display_name' => $this->participantDisplayName($participant),
                     ]),
                 ]),
-                'resources' => $tournament->resources->map(fn($resource) => [
+                'resources' => $tournament->resources->map(fn ($resource) => [
                     'id' => $resource->id,
                     'name' => $resource->name,
                     'type' => $resource->type->value,
@@ -212,6 +228,23 @@ class TournamentController extends Controller
         ]);
     }
 
+    public function destroy(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament
+    ): RedirectResponse {
+        $user = $request->user();
+
+        abort_unless($user->canAdministerVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+
+        DB::transaction(fn () => $tournament->delete());
+
+        return redirect()
+            ->route('venues.tournaments.index', $venue)
+            ->with('success', 'Turnir „'.$tournament->name.'” je obrisan.');
+    }
+
     public function setupGroups(Request $request, Venue $venue, Tournament $tournament): Response
     {
         $user = $request->user();
@@ -220,7 +253,7 @@ class TournamentController extends Controller
         abort_unless($tournament->venue_id === $venue->id, 404);
 
         $tournament->load([
-            'groups' => fn($query) => $query
+            'groups' => fn ($query) => $query
                 ->orderBy('sort_order')
                 ->orderBy('name'),
         ]);
@@ -239,7 +272,7 @@ class TournamentController extends Controller
                 'status_label' => $this->statusLabel($tournament->status),
                 'settings' => $tournament->settings ?? [],
                 'participants_count' => $tournament->participants()->count(),
-                'groups' => $tournament->groups->map(fn(TournamentGroup $group) => [
+                'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
                     'sort_order' => $group->sort_order,
@@ -273,7 +306,7 @@ class TournamentController extends Controller
             $groupSize = (int) $validated['group_size'];
 
             $desiredGroupNames = collect(range(1, $groupCount))
-                ->map(fn(int $index) => $this->groupNameFromIndex($index));
+                ->map(fn (int $index) => $this->groupNameFromIndex($index));
 
             $existingGroups = $tournament->groups()
                 ->withTrashed()
@@ -305,7 +338,7 @@ class TournamentController extends Controller
             $tournament->groups()
                 ->whereNotIn('name', $desiredGroupNames->all())
                 ->get()
-                ->each(fn(TournamentGroup $group) => $group->delete());
+                ->each(fn (TournamentGroup $group) => $group->delete());
 
             $settings = $tournament->settings ?? [];
 
@@ -353,6 +386,17 @@ class TournamentController extends Controller
         abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($tournament->venue_id === $venue->id, 404);
 
+        if (! in_array($tournament->status, [
+            TournamentStatus::DRAFT,
+            TournamentStatus::GROUP_DRAW,
+            TournamentStatus::READY,
+            TournamentStatus::GROUP_STAGE,
+        ], true)) {
+            return back()->withErrors([
+                'qualification' => 'Podešavanje prolaza više ne može da se menja nakon završetka grupne faze.',
+            ]);
+        }
+
         $validated = $request->validate([
             'direct_qualifiers_per_group' => ['required', 'integer', 'min:0', 'max:16'],
             'repechage_enabled' => ['required', 'boolean'],
@@ -362,17 +406,33 @@ class TournamentController extends Controller
 
         $groupsCount = $tournament->groups()->count();
         $groupSize = (int) data_get($tournament->settings ?? [], 'group_size', 0);
+        $knockoutSize = (int) $tournament->knockout_size;
 
         $directQualifiersPerGroup = (int) $validated['direct_qualifiers_per_group'];
         $repechageEnabled = (bool) $validated['repechage_enabled'];
         $repechageParticipantsCount = $validated['repechage_participants_count'] !== null
             ? (int) $validated['repechage_participants_count']
             : 0;
+        $repechageQualifiersCount = $validated['repechage_qualifiers_count'] !== null
+            ? (int) $validated['repechage_qualifiers_count']
+            : 0;
 
-        if ($repechageEnabled && $repechageParticipantsCount > 0) {
-            if ($groupsCount < 1) {
+        if ($groupsCount < 1 || $groupSize < 2) {
+            return back()->withErrors([
+                'direct_qualifiers_per_group' => 'Prvo moraš da podesiš grupe i veličinu grupe.',
+            ]);
+        }
+
+        if ($directQualifiersPerGroup > $groupSize) {
+            return back()->withErrors([
+                'direct_qualifiers_per_group' => 'Broj direktnih prolaza ne može biti veći od veličine grupe.',
+            ]);
+        }
+
+        if ($repechageEnabled) {
+            if ($repechageParticipantsCount < 1) {
                 return back()->withErrors([
-                    'repechage_participants_count' => 'Prvo moraš da podesiš grupe.',
+                    'repechage_participants_count' => 'Unesi koliko učesnika ide u repasaž.',
                 ]);
             }
 
@@ -390,17 +450,45 @@ class TournamentController extends Controller
                     'repechage_participants_count' => 'Previše učesnika za repasaž. Po grupi nema dovoljno učesnika posle direktnog prolaza.',
                 ]);
             }
+
+            if ($repechageQualifiersCount < 1) {
+                return back()->withErrors([
+                    'repechage_qualifiers_count' => 'Unesi koliko učesnika prolazi iz repasaža.',
+                ]);
+            }
+
+            if ($repechageQualifiersCount > $repechageParticipantsCount) {
+                return back()->withErrors([
+                    'repechage_qualifiers_count' => 'Iz repasaža ne može proći više učesnika nego što ih učestvuje.',
+                ]);
+            }
+        } else {
+            $repechageParticipantsCount = 0;
+            $repechageQualifiersCount = 0;
+        }
+
+        $configuredQualifiersCount = ($groupsCount * $directQualifiersPerGroup)
+            + $repechageQualifiersCount;
+
+        if ($knockoutSize > 0 && $configuredQualifiersCount !== $knockoutSize) {
+            return back()->withErrors([
+                'direct_qualifiers_per_group' => sprintf(
+                    'Podešavanja trenutno daju %d učesnika za nokaut, a kostur zahteva tačno %d.',
+                    $configuredQualifiersCount,
+                    $knockoutSize,
+                ),
+            ]);
         }
 
         $settings = $tournament->settings ?? [];
 
         $settings['direct_qualifiers_per_group'] = (int) $validated['direct_qualifiers_per_group'];
         $settings['repechage_enabled'] = (bool) $validated['repechage_enabled'];
-        $settings['repechage_participants_count'] = $validated['repechage_participants_count'] !== null
-            ? (int) $validated['repechage_participants_count']
+        $settings['repechage_participants_count'] = $repechageEnabled
+            ? $repechageParticipantsCount
             : null;
-        $settings['repechage_qualifiers_count'] = $validated['repechage_qualifiers_count'] !== null
-            ? (int) $validated['repechage_qualifiers_count']
+        $settings['repechage_qualifiers_count'] = $repechageEnabled
+            ? $repechageQualifiersCount
             : null;
 
         $tournament->update([
@@ -423,7 +511,7 @@ class TournamentController extends Controller
 
         if (! $this->canStartGroupDraw($tournament, $totalSlots)) {
             return back()->withErrors([
-                'status' => 'Group Draw ne može da se pokrene dok grupe nisu podešene ili status turnira nije validan.',
+                'status' => 'Unos učesnika ne može da se pokrene dok grupe nisu podešene ili status turnira nije validan.',
             ]);
         }
 
@@ -433,7 +521,7 @@ class TournamentController extends Controller
 
         return redirect()
             ->route('venues.tournaments.show', [$venue, $tournament])
-            ->with('success', 'Group Draw je pokrenut.');
+            ->with('success', 'Unos učesnika je pokrenut.');
     }
 
     public function markReady(Request $request, Venue $venue, Tournament $tournament): RedirectResponse
@@ -443,7 +531,7 @@ class TournamentController extends Controller
         abort_unless($user->canAccessVenue($venue), 403);
         abort_unless($tournament->venue_id === $venue->id, 404);
 
-        if (!in_array($tournament->status, [TournamentStatus::DRAFT, TournamentStatus::GROUP_DRAW, TournamentStatus::READY,], true)) {
+        if (! in_array($tournament->status, [TournamentStatus::DRAFT, TournamentStatus::GROUP_DRAW, TournamentStatus::READY], true)) {
             return back()->withErrors([
                 'status' => 'Unos učesnika više ne može da se završava u trenutnoj fazi turnira.',
             ]);
@@ -451,7 +539,7 @@ class TournamentController extends Controller
 
         if ($tournament
             ->matches()
-            ->where('stage', MatchStage::GROUP->value,)
+            ->where('stage', MatchStage::GROUP->value)
             ->exists()
         ) {
             return back()->withErrors([
@@ -473,7 +561,7 @@ class TournamentController extends Controller
 
         return redirect()
             ->route('venues.tournaments.show', [$venue, $tournament])
-            ->with('success', 'Unos učesnika je završen. Turnir je spreman za generisanje grupnih mečeva.',);
+            ->with('success', 'Unos učesnika je završen. Turnir je spreman za generisanje grupnih mečeva.');
     }
 
     public function generateGroupMatches(
@@ -501,7 +589,7 @@ class TournamentController extends Controller
 
         return redirect()
             ->route('venues.tournaments.show', [$venue, $tournament])
-            ->with('success', 'Generisano grupnih mečeva: ' . $createdMatches . '.');
+            ->with('success', 'Generisano grupnih mečeva: '.$createdMatches.'.');
     }
 
     public function completeGroupStage(Request $request, Venue $venue, Tournament $tournament): RedirectResponse
@@ -542,6 +630,10 @@ class TournamentController extends Controller
                 'string',
                 'max:255',
             ],
+            'tournament_date' => [
+                'nullable',
+                'date_format:Y-m-d',
+            ],
             'game_type' => [
                 'required',
                 Rule::in(array_column(GameType::cases(), 'value')),
@@ -557,7 +649,7 @@ class TournamentController extends Controller
             'knockout_size' => [
                 'nullable',
                 'integer',
-                Rule::in([8, 16, 32]),
+                Rule::in([8, 12, 16, 20, 24, 32]),
             ],
             'public_enabled' => [
                 'required',
@@ -795,7 +887,7 @@ class TournamentController extends Controller
         $resourceIds = collect(
             $validated['resource_ids'] ?? [],
         )
-            ->map(fn($id) => (int) $id)
+            ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
 
@@ -809,7 +901,7 @@ class TournamentController extends Controller
         if ($resourceIds->count() !== $venueResources->count()) {
             return back()
                 ->withErrors([
-                    'resource_ids' => 'Neki od izabranih resources ne pripada ovom lokalu ili nisu aktivni.',
+                    'resource_ids' => 'Neka od izabrane opreme ne pripada ovom lokalu ili nije aktivna.',
                 ])
                 ->withInput();
         }
@@ -834,6 +926,7 @@ class TournamentController extends Controller
             $tournament = Tournament::create([
                 'venue_id' => $venue->id,
                 'name' => $validated['name'],
+                'tournament_date' => $validated['tournament_date'] ?? now()->toDateString(),
                 'slug' => $this->uniqueSlug(
                     $venue,
                     $validated['name'],
@@ -851,20 +944,15 @@ class TournamentController extends Controller
                     $gameType,
                 ),
                 'knockout_size' => $knockoutSize,
-                'public_enabled' =>
-                $validated['public_enabled'],
+                'public_enabled' => $validated['public_enabled'],
                 'settings' => [
                     'group_count' => $groupCount,
                     'group_size' => $groupSize,
-                    'direct_qualifiers_per_group' =>
-                    $directQualifiersPerGroup,
+                    'direct_qualifiers_per_group' => $directQualifiersPerGroup,
                     'best_position_qualifiers' => [],
-                    'repechage_enabled' =>
-                    $repechageEnabled,
-                    'repechage_participants_count' =>
-                    $repechageParticipantsCount,
-                    'repechage_qualifiers_count' =>
-                    $repechageQualifiersCount,
+                    'repechage_enabled' => $repechageEnabled,
+                    'repechage_participants_count' => $repechageParticipantsCount,
+                    'repechage_qualifiers_count' => $repechageQualifiersCount,
                     'avoid_same_group_rematch' => true,
                 ],
                 'created_by_user_id' => $user->id,
@@ -889,14 +977,11 @@ class TournamentController extends Controller
             foreach ($venueResources as $venueResource) {
                 TournamentResource::create([
                     'tournament_id' => $tournament->id,
-                    'venue_resource_id' =>
-                    $venueResource->id,
+                    'venue_resource_id' => $venueResource->id,
                     'name' => $venueResource->name,
                     'type' => $venueResource->type,
-                    'sort_order' =>
-                    $venueResource->sort_order,
-                    'is_active' =>
-                    $venueResource->is_active,
+                    'sort_order' => $venueResource->sort_order,
+                    'is_active' => $venueResource->is_active,
                 ]);
             }
 
@@ -905,12 +990,12 @@ class TournamentController extends Controller
 
         return redirect()
             ->route(
-                'venues.tournaments.show',
+                'venues.tournaments.group_draw.show',
                 [$venue, $tournament],
             )
             ->with(
                 'success',
-                'Turnir i njegova podešavanja su sačuvani.',
+                'Turnir je kreiran. Dodaj prvog učesnika.',
             );
     }
 
@@ -927,11 +1012,11 @@ class TournamentController extends Controller
 
         while (
             $venue->tournaments()
-            ->withTrashed()
-            ->where('slug', $slug)
-            ->exists()
+                ->withTrashed()
+                ->where('slug', $slug)
+                ->exists()
         ) {
-            $slug = $baseSlug . '-' . $counter;
+            $slug = $baseSlug.'-'.$counter;
             $counter++;
         }
 
@@ -944,8 +1029,8 @@ class TournamentController extends Controller
             $code = Str::lower(Str::random(8));
         } while (
             Tournament::withTrashed()
-            ->where('public_code', $code)
-            ->exists()
+                ->where('public_code', $code)
+                ->exists()
         );
 
         return $code;
@@ -982,7 +1067,7 @@ class TournamentController extends Controller
     private function statusLabel(TournamentStatus $status): string
     {
         return match ($status) {
-            TournamentStatus::DRAFT => 'Draft',
+            TournamentStatus::DRAFT => 'Priprema',
             TournamentStatus::GROUP_DRAW => 'Izvlačenje grupa',
             TournamentStatus::READY => 'Spreman',
             TournamentStatus::GROUP_STAGE => 'Grupna faza',
@@ -1010,7 +1095,7 @@ class TournamentController extends Controller
         while ($index > 0) {
             $index--;
 
-            $name = chr(65 + ($index % 26)) . $name;
+            $name = chr(65 + ($index % 26)).$name;
             $index = intdiv($index, 26);
         }
 
@@ -1020,10 +1105,10 @@ class TournamentController extends Controller
     private function participantDisplayName(TournamentParticipant $participant): string
     {
         if ($participant->player) {
-            $name = trim($participant->player->first_name . ' ' . $participant->player->last_name);
+            $name = trim($participant->player->first_name.' '.$participant->player->last_name);
 
             if ($participant->player->nickname) {
-                return $name . ' (' . $participant->player->nickname . ')';
+                return $name.' ('.$participant->player->nickname.')';
             }
 
             return $name;
@@ -1079,7 +1164,7 @@ class TournamentController extends Controller
         $firstMatch = $allMatches->first();
 
         $seriesMatches = $allMatches
-            ->filter(fn(TournamentMatch $match) => $match->bracket_round === $firstMatch->bracket_round
+            ->filter(fn (TournamentMatch $match) => $match->bracket_round === $firstMatch->bracket_round
                 && (int) $match->bracket_position === (int) $firstMatch->bracket_position)
             ->values();
 
@@ -1130,7 +1215,7 @@ class TournamentController extends Controller
             'loser' => $this->participantSummary(
                 $this->participantFromSeries($seriesMatches, $seriesLoserId)
             ),
-            'score' => $winnerWins . ':' . $loserWins,
+            'score' => $winnerWins.':'.$loserWins,
         ];
     }
 
@@ -1203,13 +1288,13 @@ class TournamentController extends Controller
 
     private function canMarkReady(Tournament $tournament): bool
     {
-        if (! in_array($tournament->status, [TournamentStatus::DRAFT, TournamentStatus::GROUP_DRAW, TournamentStatus::READY,], true,)) {
+        if (! in_array($tournament->status, [TournamentStatus::DRAFT, TournamentStatus::GROUP_DRAW, TournamentStatus::READY], true)) {
             return false;
         }
 
         if ($tournament
             ->matches()
-            ->where('stage', MatchStage::GROUP->value,)
+            ->where('stage', MatchStage::GROUP->value)
             ->exists()
         ) {
             return false;
@@ -1229,7 +1314,7 @@ class TournamentController extends Controller
         }
 
         return ! $tournament->matches()
-            ->where('stage', MatchStage::GROUP->value,)
+            ->where('stage', MatchStage::GROUP->value)
             ->exists();
     }
 
@@ -1238,8 +1323,7 @@ class TournamentController extends Controller
     ): ?string {
         $groups = $tournament->groups()
             ->withCount([
-                'participants as active_participants_count' =>
-                fn($query) => $query->where(
+                'participants as active_participants_count' => fn ($query) => $query->where(
                     'status',
                     ParticipantStatus::ACTIVE->value,
                 ),
@@ -1254,7 +1338,7 @@ class TournamentController extends Controller
 
         $participantCounts = $groups
             ->pluck('active_participants_count')
-            ->map(fn($count) => (int) $count);
+            ->map(fn ($count) => (int) $count);
 
         $minimumParticipantsCount = (int) (
             $participantCounts->min() ?? 0

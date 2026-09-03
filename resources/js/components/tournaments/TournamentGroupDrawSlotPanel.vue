@@ -19,7 +19,11 @@ const emit = defineEmits<{
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <p class="text-sm text-muted-foreground">
-                        {{ manuallySelected ? 'Izabrano mesto' : 'Sledeće mesto' }}
+                        {{
+                            manuallySelected
+                                ? 'Izabrano mesto'
+                                : 'Sledeće mesto'
+                        }}
                     </p>
 
                     <p class="mt-1 text-3xl font-semibold tracking-tight">

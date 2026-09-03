@@ -10,26 +10,22 @@ defineProps<{
 </script>
 
 <template>
-    <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border xl:sticky xl:top-4 xl:self-start">
-        <h2 class="text-lg font-medium">
-            Review
-        </h2>
+    <div
+        class="rounded-xl border border-sidebar-border/70 p-4 xl:sticky xl:top-4 xl:self-start dark:border-sidebar-border"
+    >
+        <h2 class="text-lg font-medium">Pregled</h2>
 
         <div class="mt-4 space-y-3 text-sm">
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Turnir
-                </span>
+                <span class="text-muted-foreground"> Turnir </span>
 
-                <span class="font-medium text-right">
+                <span class="text-right font-medium">
                     {{ tournamentName }}
                 </span>
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Status
-                </span>
+                <span class="text-muted-foreground"> Status </span>
 
                 <span class="font-medium">
                     {{ statusLabel }}
@@ -37,9 +33,7 @@ defineProps<{
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Broj grupa
-                </span>
+                <span class="text-muted-foreground"> Broj grupa </span>
 
                 <span class="font-medium">
                     {{ groupCount }}
@@ -47,9 +41,7 @@ defineProps<{
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Mesta po grupi
-                </span>
+                <span class="text-muted-foreground"> Mesta po grupi </span>
 
                 <span class="font-medium">
                     {{ groupSize }}
@@ -57,9 +49,7 @@ defineProps<{
             </div>
 
             <div class="flex justify-between gap-4">
-                <span class="text-muted-foreground">
-                    Ukupno mesta
-                </span>
+                <span class="text-muted-foreground"> Ukupno mesta </span>
 
                 <span class="font-medium">
                     {{ groupCount * groupSize }}

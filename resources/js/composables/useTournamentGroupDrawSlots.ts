@@ -1,8 +1,6 @@
 import { computed } from 'vue';
 
-import type {
-    TournamentGroupDrawData,
-} from '@/types/tournament';
+import type { TournamentGroupDrawData } from '@/types/tournament';
 
 type UseTournamentGroupDrawSlotsOptions = {
     tournament: () => TournamentGroupDrawData;
@@ -22,29 +20,27 @@ export const useTournamentGroupDrawSlots = ({
     });
 
     const activeGroupPosition = computed<string | null>(() => {
-        return selectedGroupPosition()
-            || tournament().next_slot?.group_position
-            || null;
+        return (
+            selectedGroupPosition() ||
+            tournament().next_slot?.group_position ||
+            null
+        );
     });
 
     const isGroupDrawComplete = computed<boolean>(() => {
-        return tournament().total_slots > 0
-            && tournament().participants_count
-                >= tournament().total_slots
-            && !tournament().next_slot;
+        return (
+            tournament().total_slots > 0 &&
+            tournament().participants_count >= tournament().total_slots &&
+            !tournament().next_slot
+        );
     });
 
     const hasGroupSetup = computed<boolean>(() => {
         return tournament().total_slots > 0;
     });
 
-    const selectSlot = (
-        groupName: string,
-        slotNumber: number,
-    ) => {
-        setSelectedGroupPosition(
-            `${groupName}${slotNumber}`,
-        );
+    const selectSlot = (groupName: string, slotNumber: number) => {
+        setSelectedGroupPosition(`${groupName}${slotNumber}`);
 
         clearSlotError();
     };

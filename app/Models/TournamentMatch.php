@@ -5,11 +5,11 @@ namespace App\Models;
 use App\Enums\MatchStage;
 use App\Enums\MatchStatus;
 use App\Enums\WinReason;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Builder;
 
 class TournamentMatch extends Model
 {
@@ -68,6 +68,46 @@ class TournamentMatch extends Model
                 $builder->getModel()->qualifyColumn('is_hidden'),
                 false
             );
+
+            /*
+             * Grupni "ghost" meč nije javni meč čak ni ako je kod starog
+             * podatka is_hidden ostao pogrešno postavljen na false.
+             * Nokaut mečevi bez učesnika ostaju vidljivi kao kostur žreba.
+             */
+            $builder->where(function (Builder $query) use ($builder): void {
+                $stageColumn = $builder->getModel()->qualifyColumn('stage');
+                $participantAColumn = $builder->getModel()->qualifyColumn('participant_a_id');
+                $participantBColumn = $builder->getModel()->qualifyColumn('participant_b_id');
+
+                $query
+                    ->where($stageColumn, '!=', MatchStage::GROUP->value)
+                    ->orWhere(function (Builder $groupMatchQuery) use (
+                        $participantAColumn,
+                        $participantBColumn,
+                    ): void {
+                        $groupMatchQuery
+                            ->whereNotNull($participantAColumn)
+                            ->whereNotNull($participantBColumn);
+                    });
+            });
+
+            /*
+             * Pre uvođenja is_hidden zastavice, neiskorišćena partija već
+             * odlučene nokaut serije ostajala je kao vidljivo "Anulirano".
+             * Takvi stari redovi su i dalje interni rezervni legovi.
+             */
+            $builder->where(function (Builder $query) use ($builder): void {
+                $stageColumn = $builder->getModel()->qualifyColumn('stage');
+                $statusColumn = $builder->getModel()->qualifyColumn('status');
+
+                $query
+                    ->whereNotIn($stageColumn, [
+                        MatchStage::KNOCKOUT->value,
+                        MatchStage::THIRD_PLACE->value,
+                        MatchStage::FINAL->value,
+                    ])
+                    ->orWhere($statusColumn, '!=', MatchStatus::VOIDED->value);
+            });
         });
     }
 

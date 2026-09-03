@@ -41,7 +41,7 @@ defineOptions({
     layout: {
         breadcrumbs: [
             {
-                title: 'Edit resource',
+                title: 'Izmeni opremu',
                 href: '#',
             },
         ],
@@ -50,21 +50,24 @@ defineOptions({
 </script>
 
 <template>
-    <Head :title="`Izmeni resource - ${venue.name}`" />
+    <Head :title="`Izmeni opremu - ${venue.name}`" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div
+            class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+        >
             <div>
                 <p class="text-sm text-muted-foreground">
                     {{ venue.name }}
                 </p>
 
                 <h1 class="mt-1 text-2xl font-semibold tracking-tight">
-                    Izmeni resource
+                    Izmeni opremu
                 </h1>
 
                 <p class="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Izmeni naziv, tip, redosled ili status postojeće opreme lokala.
+                    Izmeni naziv, tip, redosled ili status postojeće opreme
+                    lokala.
                 </p>
             </div>
 
@@ -72,7 +75,7 @@ defineOptions({
                 :href="`/venues/${venue.slug}/resources`"
                 class="inline-flex items-center justify-center rounded-md border border-sidebar-border/70 px-4 py-2 text-sm font-medium hover:bg-muted dark:border-sidebar-border"
             >
-                Nazad na resources
+                Nazad na opremu
             </Link>
         </div>
 
@@ -82,10 +85,7 @@ defineOptions({
         >
             <div class="space-y-5">
                 <div>
-                    <label
-                        for="name"
-                        class="text-sm font-medium"
-                    >
+                    <label for="name" class="text-sm font-medium">
                         Naziv
                     </label>
 
@@ -95,7 +95,7 @@ defineOptions({
                         type="text"
                         class="mt-2 w-full rounded-md border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring dark:border-sidebar-border"
                         placeholder="Primer: Levi pikado"
-                    >
+                    />
 
                     <p
                         v-if="form.errors.name"
@@ -106,12 +106,7 @@ defineOptions({
                 </div>
 
                 <div>
-                    <label
-                        for="type"
-                        class="text-sm font-medium"
-                    >
-                        Tip
-                    </label>
+                    <label for="type" class="text-sm font-medium"> Tip </label>
 
                     <select
                         id="type"
@@ -136,10 +131,7 @@ defineOptions({
                 </div>
 
                 <div>
-                    <label
-                        for="sort_order"
-                        class="text-sm font-medium"
-                    >
+                    <label for="sort_order" class="text-sm font-medium">
                         Redosled
                     </label>
 
@@ -149,7 +141,7 @@ defineOptions({
                         type="number"
                         min="0"
                         class="mt-2 w-full rounded-md border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring dark:border-sidebar-border"
-                    >
+                    />
 
                     <p
                         v-if="form.errors.sort_order"
@@ -164,17 +156,12 @@ defineOptions({
                         v-model="form.is_active"
                         type="checkbox"
                         class="rounded border-sidebar-border/70"
-                    >
+                    />
 
-                    <span class="text-sm font-medium">
-                        Aktivan resource
-                    </span>
+                    <span class="text-sm font-medium"> Aktivna oprema </span>
                 </label>
 
-                <p
-                    v-if="form.errors.is_active"
-                    class="text-sm text-red-500"
-                >
+                <p v-if="form.errors.is_active" class="text-sm text-red-500">
                     {{ form.errors.is_active }}
                 </p>
             </div>

@@ -6,11 +6,17 @@ import type {
     TournamentGroupParticipant,
 } from '@/types/tournament';
 
-defineProps<{
-    groups: TournamentGroup[];
-    groupSize: number | null | undefined;
-    editUrl: string;
-}>();
+withDefaults(
+    defineProps<{
+        groups: TournamentGroup[];
+        groupSize: number | null | undefined;
+        editUrl: string;
+        canEdit?: boolean;
+    }>(),
+    {
+        canEdit: true,
+    },
+);
 
 const participantForSlot = (
     group: TournamentGroup,
@@ -23,12 +29,14 @@ const participantForSlot = (
 </script>
 
 <template>
-    <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-        <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div
+        class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+    >
+        <div
+            class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"
+        >
             <div>
-                <h2 class="text-lg font-medium">
-                    Grupe
-                </h2>
+                <h2 class="text-lg font-medium">Grupe</h2>
 
                 <p class="mt-1 text-sm text-muted-foreground">
                     Pregled grupa i mesta za učesnike.
@@ -36,6 +44,7 @@ const participantForSlot = (
             </div>
 
             <Link
+                v-if="canEdit"
                 :href="editUrl"
                 class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
             >
@@ -53,19 +62,14 @@ const participantForSlot = (
                 class="rounded-lg border border-sidebar-border/70 p-4 dark:border-sidebar-border"
             >
                 <div class="flex items-center justify-between gap-4">
-                    <h3 class="text-lg font-medium">
-                        Grupa {{ group.name }}
-                    </h3>
+                    <h3 class="text-lg font-medium">Grupa {{ group.name }}</h3>
 
                     <span class="text-sm text-muted-foreground">
                         {{ groupSize ?? 0 }} mesta
                     </span>
                 </div>
 
-                <div
-                    v-if="groupSize"
-                    class="mt-4 space-y-2"
-                >
+                <div v-if="groupSize" class="mt-4 space-y-2">
                     <div
                         v-for="slotNumber in groupSize"
                         :key="`${group.id}-${slotNumber}`"
@@ -79,13 +83,13 @@ const participantForSlot = (
                             v-if="participantForSlot(group, slotNumber)"
                             class="text-right"
                         >
-                            {{ participantForSlot(group, slotNumber)?.display_name }}
+                            {{
+                                participantForSlot(group, slotNumber)
+                                    ?.display_name
+                            }}
                         </span>
 
-                        <span
-                            v-else
-                            class="text-muted-foreground"
-                        >
+                        <span v-else class="text-muted-foreground">
                             Prazno
                         </span>
                     </div>

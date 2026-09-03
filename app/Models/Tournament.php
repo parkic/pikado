@@ -13,7 +13,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-
 class Tournament extends Model
 {
     use HasFactory;
@@ -22,6 +21,7 @@ class Tournament extends Model
     protected $fillable = [
         'venue_id',
         'name',
+        'tournament_date',
         'slug',
         'public_code',
         'game_type',
@@ -46,6 +46,7 @@ class Tournament extends Model
         'knockout_size' => 'integer',
         'public_enabled' => 'boolean',
         'settings' => 'array',
+        'tournament_date' => 'date',
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
     ];

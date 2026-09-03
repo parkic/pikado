@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 
 import PageHeader from '@/components/shared/PageHeader.vue';
+import TournamentAdminNav from '@/components/tournaments/TournamentAdminNav.vue';
 import TournamentScheduleMatchesTable from '@/components/tournaments/TournamentScheduleMatchesTable.vue';
+import TournamentScheduleStageAction from '@/components/tournaments/TournamentScheduleStageAction.vue';
 import TournamentScheduleStats from '@/components/tournaments/TournamentScheduleStats.vue';
 import TournamentScheduleTieBreakerModal from '@/components/tournaments/TournamentScheduleTieBreakerModal.vue';
 
+import { useTournamentActions } from '@/composables/useTournamentActions';
 import { useTournamentScheduleMatches } from '@/composables/useTournamentScheduleMatches';
 import { tournamentRoutes } from '@/lib/tournamentRoutes';
 
@@ -15,7 +18,6 @@ import type {
     TournamentScheduleMatch,
 } from '@/types/tournament';
 import type { VenueSummary } from '@/types/venue';
-
 
 const props = defineProps<{
     venue: VenueSummary;
@@ -35,10 +37,12 @@ defineOptions({
     },
 });
 
-const routes = tournamentRoutes(
-    props.venue.slug,
-    props.tournament.slug,
-);
+const routes = tournamentRoutes(props.venue.slug, props.tournament.slug);
+
+const { completeGroupStage } = useTournamentActions({
+    routes,
+    nextStageAfterGroups: () => props.tournament.next_stage_after_groups,
+});
 
 const {
     resultForms,
@@ -47,6 +51,7 @@ const {
     updateMatchResource,
     openTieBreakerModal,
     updateMatchResult,
+    toggleMatchPostponement,
     closeTieBreakerModal,
     chooseTieBreakerWinner,
     saveTieBreakerWinner,
@@ -54,8 +59,8 @@ const {
     matches: props.matches,
     matchResourceUrl: routes.scheduleMatchResource,
     matchResultUrl: routes.scheduleMatchResult,
+    matchPostponementUrl: routes.scheduleMatchPostponement,
 });
-
 </script>
 
 <template>
@@ -66,28 +71,30 @@ const {
             :eyebrow="venue.name"
             title="Raspored mečeva"
             :description="`Pregled generisanih mečeva za turnir: ${tournament.name}.`"
-        >
-            <template #actions>
-                <Link
-                    :href="routes.standings"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Tabela
-                </Link>
+        />
 
-                <Link
-                    :href="routes.show"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Nazad na turnir
-                </Link>
-            </template>
-        </PageHeader>
+        <TournamentAdminNav
+            active="schedule"
+            :routes="routes"
+            :status="tournament.status"
+            :repechage-enabled="tournament.repechage_enabled"
+        />
 
         <TournamentScheduleStats
             :matches-count="tournament.matches_count"
+            :finished-matches-count="tournament.finished_matches_count"
+            :tournament-status="tournament.status_label"
+        />
+
+        <TournamentScheduleStageAction
+            :status="tournament.status"
             :group-matches-count="tournament.group_matches_count"
-            :tournament-status="tournament.status"
+            :completed-group-matches-count="
+                tournament.completed_group_matches_count
+            "
+            :can-complete-group-stage="tournament.can_complete_group_stage"
+            :next-stage-after-groups="tournament.next_stage_after_groups"
+            @complete-group-stage="completeGroupStage"
         />
 
         <TournamentScheduleMatchesTable
@@ -98,22 +105,16 @@ const {
             @update-resource="updateMatchResource"
             @update-result="updateMatchResult"
             @open-tie-breaker="openTieBreakerModal"
+            @toggle-postponement="toggleMatchPostponement"
         />
-
 
         <TournamentScheduleTieBreakerModal
             v-if="tieBreakerMatch"
             :match="tieBreakerMatch"
             :result-form="resultForms[tieBreakerMatch.id]"
             @close="closeTieBreakerModal"
-            @choose-winner="
-                chooseTieBreakerWinner(
-                    tieBreakerMatch,
-                    $event,
-                )
-            "
+            @choose-winner="chooseTieBreakerWinner(tieBreakerMatch, $event)"
             @save="saveTieBreakerWinner"
         />
-
     </div>
 </template>

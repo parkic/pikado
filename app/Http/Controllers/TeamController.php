@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Team;
+use App\Models\Venue;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-
-use App\Models\Venue;
-use App\Models\Team;
 
 class TeamController extends Controller
 {

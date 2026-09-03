@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
+import { ArrowRight, Building2 } from '@lucide/vue';
 import { dashboard } from '@/routes';
 
 type VenueUser = {
@@ -24,6 +25,18 @@ defineProps<{
     userContext: UserContext;
 }>();
 
+const roleLabel = (role: string): string => {
+    if (role === 'admin') {
+        return 'Administrator';
+    }
+
+    if (role === 'staff') {
+        return 'Osoblje';
+    }
+
+    return role;
+};
+
 defineOptions({
     layout: {
         breadcrumbs: [
@@ -41,85 +54,59 @@ defineOptions({
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
         <div>
-            <h1 class="text-2xl font-semibold tracking-tight">
-                Pikado Dashboard
-            </h1>
+            <h1 class="text-2xl font-semibold tracking-tight">Izaberi lokal</h1>
 
             <p class="mt-1 text-sm text-muted-foreground">
-                Osnovni admin kontekst za ulogovanog korisnika.
+                Nastavi tamo gde organizuješ turnire.
             </p>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-3">
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-                <p class="text-sm text-muted-foreground">Korisnik</p>
-                <p class="mt-2 text-lg font-medium">
-                    {{ userContext.name }}
-                </p>
-                <p class="mt-1 text-sm text-muted-foreground">
-                    {{ userContext.email }}
-                </p>
-            </div>
-
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-                <p class="text-sm text-muted-foreground">Globalna rola</p>
-                <p class="mt-2 text-lg font-medium">
-                    {{ userContext.global_role ?? 'Nema globalnu rolu' }}
-                </p>
-            </div>
-
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-                <p class="text-sm text-muted-foreground">Lokali</p>
-                <p class="mt-2 text-lg font-medium">
-                    {{ userContext.venue_users.length }}
-                </p>
-            </div>
-        </div>
-
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+        <div
+            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+        >
             <div class="flex items-center justify-between gap-4">
                 <div>
                     <h2 class="text-lg font-medium">
-                        Moji lokali
+                        Zdravo, {{ userContext.name }}
                     </h2>
 
                     <p class="mt-1 text-sm text-muted-foreground">
-                        Lokali kojima ovaj korisnik ima pristup.
+                        Izaberi lokal za upravljanje turnirima.
                     </p>
                 </div>
             </div>
 
             <div
                 v-if="userContext.venue_users.length"
-                class="mt-4 overflow-hidden rounded-lg border border-sidebar-border/70 dark:border-sidebar-border"
+                class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
             >
-                <table class="w-full text-left text-sm">
-                    <thead class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border">
-                        <tr>
-                            <th class="px-4 py-3 font-medium">Lokal</th>
-                            <th class="px-4 py-3 font-medium">Slug</th>
-                            <th class="px-4 py-3 font-medium">Rola</th>
-                        </tr>
-                    </thead>
+                <Link
+                    v-for="venueUser in userContext.venue_users"
+                    :key="venueUser.id"
+                    :href="`/venues/${venueUser.venue.slug}`"
+                    class="group flex items-center gap-3 rounded-xl border border-sidebar-border/70 p-4 transition hover:border-primary/40 hover:bg-muted/40 dark:border-sidebar-border"
+                >
+                    <span
+                        class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
+                    >
+                        <Building2 class="size-5" />
+                    </span>
 
-                    <tbody>
-                        <tr
-                            v-for="venueUser in userContext.venue_users"
-                            :key="venueUser.id"
-                            class="border-b border-sidebar-border/70 last:border-b-0 dark:border-sidebar-border"
+                    <span class="min-w-0 flex-1">
+                        <span class="block truncate font-medium">
+                            {{ venueUser.venue.name }}
+                        </span>
+                        <span
+                            class="mt-0.5 block text-sm text-muted-foreground"
                         >
-                            <td class="px-4 py-3">
-                                {{ venueUser.venue.name }}
-                            </td>
-                            <td class="px-4 py-3 text-muted-foreground">
-                                {{ venueUser.venue.slug }}
-                            </td>
-                            <td class="px-4 py-3">
-                                {{ venueUser.role }}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                            {{ roleLabel(venueUser.role) }}
+                        </span>
+                    </span>
+
+                    <ArrowRight
+                        class="size-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground"
+                    />
+                </Link>
             </div>
 
             <div

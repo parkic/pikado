@@ -13,8 +13,8 @@
 /vendor
 .DS_Store
 .env
-.env.backup
-.env.production
+.env.*
+!.env.example
 .phpactor.json
 .phpunit.result.cache
 Homestead.json
@@ -22,6 +22,16 @@ Homestead.yaml
 npm-debug.log
 yarn-error.log
 /auth.json
+/backups
+/deploy/seed-storage
+*.key
+*.pem
+*.p12
+*.pfx
+id_dsa*
+id_ecdsa*
+id_ed25519*
+id_rsa*
 /.fleet
 /.idea
 /.nova

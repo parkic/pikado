@@ -5,10 +5,11 @@ namespace App\Events;
 use App\Models\Tournament;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
+use Illuminate\Contracts\Broadcasting\ShouldRescue;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class TournamentLiveUpdated implements ShouldBroadcastNow
+class TournamentLiveUpdated implements ShouldBroadcastNow, ShouldRescue
 {
     use Dispatchable;
     use SerializesModels;
@@ -16,12 +17,11 @@ class TournamentLiveUpdated implements ShouldBroadcastNow
     public function __construct(
         public Tournament $tournament,
         public string $reason = 'updated',
-    ) {
-    }
+    ) {}
 
     public function broadcastOn(): Channel
     {
-        return new Channel('public-tournament.' . $this->tournament->public_code);
+        return new Channel('public-tournament.'.$this->tournament->public_code);
     }
 
     public function broadcastAs(): string

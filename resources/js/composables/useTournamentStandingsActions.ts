@@ -1,19 +1,12 @@
 import { router } from '@inertiajs/vue3';
 
-import type {
-    TournamentStandingRow,
-} from '@/types/tournament';
+import { confirmAction } from '@/composables/useConfirmDialog';
+import type { TournamentStandingRow } from '@/types/tournament';
 
 type UseTournamentStandingsActionsOptions = {
-    qualificationOverrideUrl: (
-        participantId: number,
-    ) => string;
-    participantWithdrawUrl: (
-        participantId: number,
-    ) => string;
-    participantRestoreUrl: (
-        participantId: number,
-    ) => string;
+    qualificationOverrideUrl: (participantId: number) => string;
+    participantWithdrawUrl: (participantId: number) => string;
+    participantRestoreUrl: (participantId: number) => string;
 };
 
 export const useTournamentStandingsActions = ({
@@ -23,17 +16,12 @@ export const useTournamentStandingsActions = ({
 }: UseTournamentStandingsActionsOptions) => {
     const updateQualificationOverride = (
         row: TournamentStandingRow,
-        event: Event,
+        value: string,
     ) => {
-        const target = event.target as HTMLSelectElement;
-
         router.patch(
-            qualificationOverrideUrl(
-                row.participant_id,
-            ),
+            qualificationOverrideUrl(row.participant_id),
             {
-                qualification_override_status:
-                    target.value || null,
+                qualification_override_status: value || null,
             },
             {
                 preserveScroll: true,
@@ -42,22 +30,32 @@ export const useTournamentStandingsActions = ({
         );
     };
 
-    const withdrawParticipant = (
+    const withdrawParticipant = async (
         row: TournamentStandingRow,
+        withdrawalPolicy: string,
     ) => {
-        const confirmed = window.confirm(
-            `Da li želiš da označiš učesnika "${row.display_name}" kao odustao? Njegovi grupni mečevi biće anulirani za tabelu.`,
-        );
+        const policyDescriptions: Record<string, string> = {
+            void_all:
+                'Svi njegovi rezultati biće anulirani i neće uticati na tabelu.',
+            keep_played_average_rest:
+                'Odigrani rezultati ostaju, a preostali se automatski obračunavaju prema proseku igrača.',
+            keep_played_manual_rest:
+                'Odigrani rezultati ostaju, a preostali mečevi čekaju da administrator ručno unese rezultat.',
+        };
+        const confirmed = await confirmAction({
+            title: 'Označi učesnika kao odustalog?',
+            description: `${row.display_name} više neće biti aktivan. ${policyDescriptions[withdrawalPolicy] ?? ''}`,
+            confirmLabel: 'Označi kao odustao',
+            variant: 'destructive',
+        });
 
         if (!confirmed) {
             return;
         }
 
         router.patch(
-            participantWithdrawUrl(
-                row.participant_id,
-            ),
-            {},
+            participantWithdrawUrl(row.participant_id),
+            { withdrawal_policy: withdrawalPolicy },
             {
                 preserveScroll: true,
                 preserveState: false,
@@ -65,21 +63,19 @@ export const useTournamentStandingsActions = ({
         );
     };
 
-    const restoreParticipant = (
-        row: TournamentStandingRow,
-    ) => {
-        const confirmed = window.confirm(
-            `Da li želiš da vratiš učesnika "${row.display_name}" u aktivne? Njegovi grupni mečevi biće vraćeni na prethodni status.`,
-        );
+    const restoreParticipant = async (row: TournamentStandingRow) => {
+        const confirmed = await confirmAction({
+            title: 'Vrati učesnika u turnir?',
+            description: `${row.display_name} će ponovo biti aktivan, a njegovi grupni mečevi vraćeni na prethodni status.`,
+            confirmLabel: 'Vrati učesnika',
+        });
 
         if (!confirmed) {
             return;
         }
 
         router.patch(
-            participantRestoreUrl(
-                row.participant_id,
-            ),
+            participantRestoreUrl(row.participant_id),
             {},
             {
                 preserveScroll: true,

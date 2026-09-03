@@ -7,7 +7,10 @@ import TournamentGroupSettingsFields from '@/components/tournaments/TournamentGr
 import TournamentGroupsSetupReview from '@/components/tournaments/TournamentGroupsSetupReview.vue';
 
 import { tournamentRoutes } from '@/lib/tournamentRoutes';
-import type { TournamentGroupsSetupData, TournamentGroupsSetupFormData } from '@/types/tournament';
+import type {
+    TournamentGroupsSetupData,
+    TournamentGroupsSetupFormData,
+} from '@/types/tournament';
 import type { VenueSummary } from '@/types/venue';
 
 const props = defineProps<{
@@ -19,17 +22,14 @@ defineOptions({
     layout: {
         breadcrumbs: [
             {
-                title: 'Setup grupa',
+                title: 'Podešavanje grupa',
                 href: '#',
             },
         ],
     },
 });
 
-const routes = tournamentRoutes(
-    props.venue.slug,
-    props.tournament.slug,
-);
+const routes = tournamentRoutes(props.venue.slug, props.tournament.slug);
 
 const form = useForm<TournamentGroupsSetupFormData>({
     group_count: props.tournament.settings.group_count ?? 4,
@@ -42,12 +42,12 @@ const submit = () => {
 </script>
 
 <template>
-    <Head :title="`Setup grupa - ${tournament.name}`" />
+    <Head :title="`Podešavanje grupa - ${tournament.name}`" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
         <PageHeader
             :eyebrow="venue.name"
-            title="Setup grupa"
+            title="Podešavanje grupa"
             :description="`Podesi broj grupa i broj mesta po grupi za turnir: ${tournament.name}.`"
         >
             <template #actions>
@@ -75,9 +75,7 @@ const submit = () => {
                     @update:group-size="form.group_size = $event"
                 />
 
-                <TournamentCurrentGroups
-                    :groups="tournament.groups"
-                />
+                <TournamentCurrentGroups :groups="tournament.groups" />
             </div>
 
             <TournamentGroupsSetupReview

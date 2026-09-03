@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import type {
-    TournamentRepechageParticipant,
-} from '@/types/tournament';
+import type { TournamentRepechageParticipant } from '@/types/tournament';
 
 defineProps<{
     directQualifiers: TournamentRepechageParticipant[];
@@ -16,9 +14,7 @@ const emit = defineEmits<{
     ];
 }>();
 
-const differenceLabel = (
-    difference: number,
-): string => {
+const differenceLabel = (difference: number): string => {
     if (difference > 0) {
         return `+${difference}`;
     }
@@ -26,9 +22,7 @@ const differenceLabel = (
     return String(difference);
 };
 
-const repechageOutcomeBadgeClasses = (
-    status: string | null,
-): string => {
+const repechageOutcomeBadgeClasses = (status: string | null): string => {
     if (status === 'advanced') {
         return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
     }
@@ -48,9 +42,7 @@ const repechageOutcomeBadgeClasses = (
                 class="rounded-xl border border-yellow-500/30 p-4 dark:border-yellow-500/30"
             >
                 <div>
-                    <h2 class="text-lg font-medium">
-                        Učesnici za repasaž
-                    </h2>
+                    <h2 class="text-lg font-medium">Učesnici za repasaž</h2>
 
                     <p class="mt-1 text-sm text-muted-foreground">
                         Sortirani po učinku iz grupne faze.
@@ -67,48 +59,49 @@ const repechageOutcomeBadgeClasses = (
                                 class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border"
                             >
                                 <tr>
-                                    <th class="px-3 py-3 font-medium">
-                                        #
-                                    </th>
+                                    <th class="px-3 py-3 font-medium">#</th>
 
                                     <th class="px-3 py-3 font-medium">
                                         Učesnik
                                     </th>
 
-                                    <th class="px-3 py-3 text-center font-medium">
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
                                         Grupa
                                     </th>
 
-                                    <th class="px-3 py-3 text-center font-medium">
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
                                         P
                                     </th>
 
-                                    <th class="px-3 py-3 text-center font-medium">
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
                                         +/-
                                     </th>
 
-                                    <th class="px-3 py-3 text-center font-medium">
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
                                         Bod
                                     </th>
 
-                                    <th class="px-3 py-3 font-medium">
-                                        Ishod
-                                    </th>
+                                    <th class="px-3 py-3 font-medium">Ishod</th>
                                 </tr>
                             </thead>
 
                             <tbody>
                                 <tr
                                     v-for="(
-                                        participant,
-                                        index
+                                        participant, index
                                     ) in repechageParticipants"
                                     :key="participant.participant_id"
                                     class="border-b border-sidebar-border/70 last:border-b-0 dark:border-sidebar-border"
                                 >
-                                    <td
-                                        class="px-3 py-3 text-muted-foreground"
-                                    >
+                                    <td class="px-3 py-3 text-muted-foreground">
                                         {{ index + 1 }}
                                     </td>
 
@@ -121,8 +114,8 @@ const repechageOutcomeBadgeClasses = (
                                             class="mt-1 text-xs text-muted-foreground"
                                         >
                                             {{
-                                                participant.group_position
-                                                    ?? '-'
+                                                participant.qualification_position ??
+                                                '-'
                                             }}
                                         </div>
                                     </td>
@@ -176,10 +169,10 @@ const repechageOutcomeBadgeClasses = (
 
                                             <select
                                                 :value="
-                                                    participant.repechage_outcome_status
-                                                        ?? ''
+                                                    participant.repechage_outcome_status ??
+                                                    ''
                                                 "
-                                                class="rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-xs outline-none transition focus:border-primary dark:border-sidebar-border"
+                                                class="rounded-lg border border-sidebar-border/70 bg-background px-2 py-2 text-xs transition outline-none focus:border-primary dark:border-sidebar-border"
                                                 @change="
                                                     emit(
                                                         'update-outcome',
@@ -220,9 +213,7 @@ const repechageOutcomeBadgeClasses = (
                 class="rounded-xl border border-emerald-500/30 p-4 dark:border-emerald-500/30"
             >
                 <div>
-                    <h2 class="text-lg font-medium">
-                        Direktan prolaz
-                    </h2>
+                    <h2 class="text-lg font-medium">Direktan prolaz</h2>
 
                     <p class="mt-1 text-sm text-muted-foreground">
                         Ovi učesnici čekaju sledeću fazu.
@@ -239,27 +230,33 @@ const repechageOutcomeBadgeClasses = (
                                 class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border"
                             >
                                 <tr>
-                                    <th class="px-3 py-3 font-medium">
-                                        #
-                                    </th>
+                                    <th class="px-3 py-3 font-medium">#</th>
 
                                     <th class="px-3 py-3 font-medium">
                                         Učesnik
                                     </th>
 
-                                    <th class="px-3 py-3 text-center font-medium">
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
                                         Grupa
                                     </th>
 
-                                    <th class="px-3 py-3 text-center font-medium">
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
                                         P
                                     </th>
 
-                                    <th class="px-3 py-3 text-center font-medium">
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
                                         +/-
                                     </th>
 
-                                    <th class="px-3 py-3 text-center font-medium">
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
                                         Bod
                                     </th>
                                 </tr>
@@ -268,15 +265,12 @@ const repechageOutcomeBadgeClasses = (
                             <tbody>
                                 <tr
                                     v-for="(
-                                        participant,
-                                        index
+                                        participant, index
                                     ) in directQualifiers"
                                     :key="participant.participant_id"
                                     class="border-b border-sidebar-border/70 last:border-b-0 dark:border-sidebar-border"
                                 >
-                                    <td
-                                        class="px-3 py-3 text-muted-foreground"
-                                    >
+                                    <td class="px-3 py-3 text-muted-foreground">
                                         {{ index + 1 }}
                                     </td>
 
@@ -289,8 +283,8 @@ const repechageOutcomeBadgeClasses = (
                                             class="mt-1 text-xs text-muted-foreground"
                                         >
                                             {{
-                                                participant.group_position
-                                                    ?? '-'
+                                                participant.qualification_position ??
+                                                '-'
                                             }}
                                         </div>
                                     </td>
@@ -343,9 +337,7 @@ const repechageOutcomeBadgeClasses = (
             class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
         >
             <div>
-                <h2 class="text-lg font-medium">
-                    Ispali
-                </h2>
+                <h2 class="text-lg font-medium">Ispali</h2>
 
                 <p class="mt-1 text-sm text-muted-foreground">
                     Učesnici koji ne nastavljaju takmičenje.
@@ -365,11 +357,9 @@ const repechageOutcomeBadgeClasses = (
                         {{ participant.display_name }}
                     </div>
 
-                    <div
-                        class="mt-1 text-xs text-muted-foreground"
-                    >
+                    <div class="mt-1 text-xs text-muted-foreground">
                         Grupa {{ participant.group_name }} ·
-                        {{ participant.group_position ?? '-' }}
+                        {{ participant.qualification_position ?? '-' }}
                     </div>
                 </div>
             </div>

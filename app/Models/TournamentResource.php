@@ -38,6 +38,7 @@ class TournamentResource extends Model
     {
         return $this->belongsTo(VenueResource::class);
     }
+
     public function matches(): HasMany
     {
         return $this->hasMany(TournamentMatch::class);

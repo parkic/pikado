@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { EllipsisVertical, UserX } from '@lucide/vue';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 import type {
     TournamentKnockoutRound,
@@ -10,9 +19,7 @@ import type {
 defineProps<{
     rounds: TournamentKnockoutRound[];
     scheduleUrl: string;
-    canApplyWalkover: (
-        series: TournamentKnockoutSeries,
-    ) => boolean;
+    canApplyWalkover: (series: TournamentKnockoutSeries) => boolean;
 }>();
 
 const emit = defineEmits<{
@@ -22,9 +29,7 @@ const emit = defineEmits<{
     ];
 }>();
 
-const seriesStatusClasses = (
-    status: string,
-): string => {
+const seriesStatusClasses = (status: string): string => {
     if (status === 'finished') {
         return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
     }
@@ -40,9 +45,7 @@ const seriesStatusClasses = (
     return 'bg-muted text-muted-foreground';
 };
 
-const legStatusClasses = (
-    status: string,
-): string => {
+const legStatusClasses = (status: string): string => {
     if (status === 'finished') {
         return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
     }
@@ -67,14 +70,11 @@ const legStatusClasses = (
             class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"
         >
             <div>
-                <h2 class="text-lg font-medium">
-                    Nokaut serije
-                </h2>
+                <h2 class="text-lg font-medium">Nokaut serije</h2>
 
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Pregled nokaut duela po rundama. Rezultati
-                    se i dalje unose kroz raspored, a ovde se
-                    vidi stanje cele serije.
+                    Pregled nokaut duela po rundama. Rezultati se i dalje unose
+                    kroz raspored, a ovde se vidi stanje cele serije.
                 </p>
             </div>
 
@@ -87,13 +87,8 @@ const legStatusClasses = (
         </div>
 
         <div class="mt-6 space-y-8">
-            <section
-                v-for="round in rounds"
-                :key="round.round_key"
-            >
-                <div
-                    class="mb-3 flex items-center justify-between gap-4"
-                >
+            <section v-for="round in rounds" :key="round.round_key">
+                <div class="mb-3 flex items-center justify-between gap-4">
                     <h3 class="text-base font-semibold">
                         {{ round.round_label }}
                     </h3>
@@ -106,9 +101,7 @@ const legStatusClasses = (
                 <div class="grid gap-4 xl:grid-cols-2">
                     <article
                         v-for="series in round.series"
-                        :key="
-                            `${series.round_key}-${series.position}`
-                        "
+                        :key="`${series.round_key}-${series.position}`"
                         class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
                     >
                         <div
@@ -119,9 +112,7 @@ const legStatusClasses = (
                                     {{ series.title }}
                                 </h4>
 
-                                <p
-                                    class="mt-1 text-sm text-muted-foreground"
-                                >
+                                <p class="mt-1 text-sm text-muted-foreground">
                                     Na
                                     {{ series.wins_required }}
                                     dobijene · maksimalno
@@ -130,16 +121,75 @@ const legStatusClasses = (
                                 </p>
                             </div>
 
-                            <span
-                                class="inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium"
-                                :class="
-                                    seriesStatusClasses(
-                                        series.status,
-                                    )
-                                "
-                            >
-                                {{ series.status_label }}
-                            </span>
+                            <div class="flex shrink-0 items-center gap-2">
+                                <span
+                                    class="inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium"
+                                    :class="seriesStatusClasses(series.status)"
+                                >
+                                    {{ series.status_label }}
+                                </span>
+
+                                <DropdownMenu v-if="canApplyWalkover(series)">
+                                    <DropdownMenuTrigger as-child>
+                                        <button
+                                            type="button"
+                                            class="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                            title="Akcije serije"
+                                            aria-label="Otvori akcije nokaut serije"
+                                        >
+                                            <EllipsisVertical class="size-4" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+
+                                    <DropdownMenuContent
+                                        align="end"
+                                        class="w-60"
+                                    >
+                                        <DropdownMenuLabel>
+                                            Odustajanje / walkover
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+
+                                        <DropdownMenuItem
+                                            v-if="series.participant_a"
+                                            class="cursor-pointer text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+                                            @select="
+                                                emit(
+                                                    'apply-walkover',
+                                                    series,
+                                                    series.participant_a,
+                                                )
+                                            "
+                                        >
+                                            <UserX class="mr-2 size-3.5" />
+                                            {{
+                                                series.participant_a
+                                                    .display_name
+                                            }}
+                                            odustao
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuItem
+                                            v-if="series.participant_b"
+                                            class="cursor-pointer text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+                                            @select="
+                                                emit(
+                                                    'apply-walkover',
+                                                    series,
+                                                    series.participant_b,
+                                                )
+                                            "
+                                        >
+                                            <UserX class="mr-2 size-3.5" />
+                                            {{
+                                                series.participant_b
+                                                    .display_name
+                                            }}
+                                            odustao
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
                         </div>
 
                         <div
@@ -149,41 +199,23 @@ const legStatusClasses = (
                                 <p
                                     class="font-medium"
                                     :class="
-                                        series.participant_a
-                                            ?.is_withdrawn
+                                        series.participant_a?.is_withdrawn
                                             ? 'text-muted-foreground line-through'
                                             : ''
                                     "
                                 >
                                     {{
-                                        series.participant_a
-                                            ?.display_name
-                                            ?? 'Čeka učesnika'
+                                        series.participant_a?.display_name ??
+                                        '—'
                                     }}
                                 </p>
 
                                 <span
-                                    v-if="
-                                        series.participant_a
-                                            ?.is_withdrawn
-                                    "
+                                    v-if="series.participant_a?.is_withdrawn"
                                     class="mt-1 inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
                                 >
                                     Odustao
                                 </span>
-
-                                <p
-                                    v-if="
-                                        series.participant_a
-                                            ?.group_position
-                                    "
-                                    class="mt-1 text-xs text-muted-foreground"
-                                >
-                                    {{
-                                        series.participant_a
-                                            .group_position
-                                    }}
-                                </p>
                             </div>
 
                             <div
@@ -196,94 +228,23 @@ const legStatusClasses = (
                                 <p
                                     class="font-medium"
                                     :class="
-                                        series.participant_b
-                                            ?.is_withdrawn
+                                        series.participant_b?.is_withdrawn
                                             ? 'text-muted-foreground line-through'
                                             : ''
                                     "
                                 >
                                     {{
-                                        series.participant_b
-                                            ?.display_name
-                                            ?? 'Čeka učesnika'
+                                        series.participant_b?.display_name ??
+                                        '—'
                                     }}
                                 </p>
 
                                 <span
-                                    v-if="
-                                        series.participant_b
-                                            ?.is_withdrawn
-                                    "
+                                    v-if="series.participant_b?.is_withdrawn"
                                     class="mt-1 inline-flex rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-300"
                                 >
                                     Odustao
                                 </span>
-
-                                <p
-                                    v-if="
-                                        series.participant_b
-                                            ?.group_position
-                                    "
-                                    class="mt-1 text-xs text-muted-foreground"
-                                >
-                                    {{
-                                        series.participant_b
-                                            .group_position
-                                    }}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div
-                            v-if="canApplyWalkover(series)"
-                            class="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3"
-                        >
-                            <p
-                                class="text-xs font-medium text-red-700 dark:text-red-300"
-                            >
-                                Walkover / odustajanje
-                            </p>
-
-                            <div
-                                class="mt-2 flex flex-col gap-2 sm:flex-row"
-                            >
-                                <button
-                                    v-if="series.participant_a"
-                                    type="button"
-                                    class="inline-flex items-center justify-center rounded-lg border border-red-500/30 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
-                                    @click="
-                                        emit(
-                                            'apply-walkover',
-                                            series,
-                                            series.participant_a,
-                                        )
-                                    "
-                                >
-                                    {{
-                                        series.participant_a
-                                            .display_name
-                                    }}
-                                    odustao
-                                </button>
-
-                                <button
-                                    v-if="series.participant_b"
-                                    type="button"
-                                    class="inline-flex items-center justify-center rounded-lg border border-red-500/30 px-3 py-2 text-xs font-medium text-red-700 transition hover:bg-red-500/10 dark:text-red-300"
-                                    @click="
-                                        emit(
-                                            'apply-walkover',
-                                            series,
-                                            series.participant_b,
-                                        )
-                                    "
-                                >
-                                    {{
-                                        series.participant_b
-                                            .display_name
-                                    }}
-                                    odustao
-                                </button>
                             </div>
                         </div>
 
@@ -295,9 +256,7 @@ const legStatusClasses = (
                                     class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border"
                                 >
                                     <tr>
-                                        <th
-                                            class="px-3 py-2 font-medium"
-                                        >
+                                        <th class="px-3 py-2 font-medium">
                                             Partija
                                         </th>
 
@@ -313,16 +272,12 @@ const legStatusClasses = (
                                             Rezultat
                                         </th>
 
-                                        <th
-                                            class="px-3 py-2 font-medium"
-                                        >
+                                        <th class="px-3 py-2 font-medium">
                                             Pobednik
                                         </th>
 
-                                        <th
-                                            class="px-3 py-2 font-medium"
-                                        >
-                                            Resource
+                                        <th class="px-3 py-2 font-medium">
+                                            Tabla / sto
                                         </th>
                                     </tr>
                                 </thead>
@@ -339,20 +294,14 @@ const legStatusClasses = (
                                             Leg {{ leg.leg }}
                                         </td>
 
-                                        <td
-                                            class="px-3 py-2 text-center"
-                                        >
+                                        <td class="px-3 py-2 text-center">
                                             <span
                                                 class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
                                                 :class="
-                                                    legStatusClasses(
-                                                        leg.status,
-                                                    )
+                                                    legStatusClasses(leg.status)
                                                 "
                                             >
-                                                {{
-                                                    leg.status_label
-                                                }}
+                                                {{ leg.status_label }}
                                             </span>
                                         </td>
 
@@ -364,19 +313,14 @@ const legStatusClasses = (
 
                                         <td class="px-3 py-2">
                                             {{
-                                                leg.winner
-                                                    ?.display_name
-                                                    ?? '-'
+                                                leg.winner?.display_name ?? '-'
                                             }}
                                         </td>
 
                                         <td
                                             class="px-3 py-2 text-muted-foreground"
                                         >
-                                            {{
-                                                leg.resource_name
-                                                    ?? '-'
-                                            }}
+                                            {{ leg.resource_name ?? '-' }}
                                         </td>
                                     </tr>
                                 </tbody>

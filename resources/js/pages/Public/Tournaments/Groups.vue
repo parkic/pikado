@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
+import { useMediaQuery } from '@vueuse/core';
+import { computed, ref } from 'vue';
+import PublicTournamentHeader from '@/components/public/PublicTournamentHeader.vue';
+import PublicTournamentLayout from '@/components/public/PublicTournamentLayout.vue';
 import { usePublicTournamentRealtime } from '@/composables/usePublicTournamentRealtime';
-
-type Venue = {
-    name: string;
-    slug: string;
-    logo_path: string | null;
-};
+import type { PublicVenueBranding } from '@/types';
 
 type Tournament = {
     id: number;
@@ -16,11 +15,13 @@ type Tournament = {
     match_mode: string;
     status: string;
     status_label: string;
+    has_repechage: boolean;
 };
 
 type StandingRow = {
     participant_id: number;
     group_position: string | null;
+    qualification_position: string | null;
     display_name: string;
     played: number;
     wins: number;
@@ -36,13 +37,15 @@ type StandingRow = {
     qualification_status: string;
     qualification_label: string;
     qualification_is_manual?: boolean;
+    profile_url: string | null;
 };
 
 type MatchParticipant = {
     id: number;
     display_name: string;
-    group_position: string | null;
+    qualification_position: string | null;
     is_withdrawn: boolean;
+    profile_url: string | null;
 } | null;
 
 type PublicMatch = {
@@ -75,14 +78,21 @@ type PublicGroup = {
 };
 
 const props = defineProps<{
-    venue: Venue;
+    venue: PublicVenueBranding;
     tournament: Tournament;
     groups: PublicGroup[];
 }>();
 
-const { realtimeStatus, lastRealtimeUpdateAt } = usePublicTournamentRealtime({
+usePublicTournamentRealtime({
     publicCode: props.tournament.public_code,
 });
+const isMobile = useMediaQuery('(max-width: 767px)');
+const selectedGroupName = ref(props.groups[0]?.name ?? '');
+const displayedGroups = computed(() =>
+    isMobile.value
+        ? props.groups.filter((group) => group.name === selectedGroupName.value)
+        : props.groups,
+);
 
 const differenceLabel = (difference: number): string => {
     if (difference > 0) {
@@ -92,317 +102,399 @@ const differenceLabel = (difference: number): string => {
     return String(difference);
 };
 
-const qualificationClasses = (status: string): string => {
+const qualificationRowClasses = (status: string): string => {
     if (status === 'direct') {
-        return 'bg-emerald-500/15 text-emerald-200';
+        return 'border-emerald-500/20 bg-emerald-500/[0.08]';
     }
 
     if (status === 'repechage') {
-        return 'bg-yellow-500/15 text-yellow-200';
+        return 'border-amber-300/30 bg-amber-400/[0.13]';
     }
 
-    if (status === 'withdrawn') {
-        return 'bg-red-500/15 text-red-200';
+    if (status === 'eliminated' || status === 'withdrawn') {
+        return 'border-red-400/30 bg-red-500/[0.12]';
     }
 
-    return 'bg-zinc-700 text-zinc-300';
+    return 'border-white/10 bg-white/[0.03]';
 };
 
-const matchStatusClasses = (status: string): string => {
-    if (status === 'finished') {
-        return 'bg-emerald-500/15 text-emerald-200';
-    }
-
-    if (status === 'in_progress') {
-        return 'bg-sky-500/15 text-sky-200';
-    }
-
-    if (status === 'voided') {
-        return 'bg-zinc-700 text-zinc-300';
-    }
-
-    return 'bg-yellow-500/15 text-yellow-200';
-};
+const eliminationLegendLabel = computed(() =>
+    props.tournament.status === 'group_stage' ? 'Ispada' : 'Ispao',
+);
 </script>
 
 <template>
     <Head :title="`${tournament.name} - Grupe`" />
 
-    <div class="min-h-screen bg-zinc-950 text-zinc-50">
-        <main class="mx-auto flex w-full max-w-full flex-col gap-6 px-4 py-6 md:px-8">
-            <header class="rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-8">
-                <div class="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+    <PublicTournamentLayout :theme="venue.public_theme">
+        <PublicTournamentHeader
+            :venue="venue"
+            :tournament="tournament"
+            active-page="groups"
+        />
+
+        <div
+            v-if="groups.length > 1"
+            class="sticky top-2 z-20 rounded-2xl border border-white/10 bg-zinc-950/95 p-2 shadow-xl shadow-black/20 backdrop-blur md:hidden"
+        >
+            <p
+                class="px-1 pb-1.5 text-[10px] font-semibold tracking-wider text-zinc-500 uppercase"
+            >
+                Izaberi grupu
+            </p>
+            <div class="flex gap-1.5 overflow-x-auto">
+                <button
+                    v-for="group in groups"
+                    :key="group.id"
+                    type="button"
+                    class="shrink-0 rounded-xl px-3 py-2 text-xs font-bold transition"
+                    :class="
+                        selectedGroupName === group.name
+                            ? 'bg-orange-500 text-white shadow-sm'
+                            : 'border border-white/10 bg-white/[0.03] text-zinc-300'
+                    "
+                    @click="selectedGroupName = group.name"
+                >
+                    Grupa {{ group.name }}
+                </button>
+            </div>
+        </div>
+
+        <section
+            v-if="groups.length"
+            class="grid gap-4 md:gap-6 xl:grid-cols-2"
+        >
+            <article
+                v-for="group in displayedGroups"
+                :key="group.id"
+                class="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 md:rounded-3xl md:p-5"
+            >
+                <div class="flex items-start justify-between gap-3">
                     <div>
-                        <p class="text-sm uppercase tracking-[0.25em] text-zinc-400">
-                            {{ venue.name }}
-                        </p>
+                        <h2
+                            class="text-xl font-semibold md:text-2xl 2xl:text-4xl"
+                        >
+                            Grupa {{ group.name }}
+                        </h2>
 
-                        <h1 class="mt-3 text-3xl font-bold tracking-tight md:text-5xl">
-                            Grupe
-                        </h1>
-
-                        <p class="mt-3 max-w-3xl text-zinc-400">
-                            {{ tournament.name }} · {{ tournament.status_label }}
+                        <p
+                            class="mt-0.5 text-[11px] text-zinc-400 md:mt-1 md:text-sm"
+                        >
+                            Odigrano {{ group.finished_matches_count }} /
+                            {{ group.matches_count }} mečeva
                         </p>
                     </div>
 
-                    <nav class="flex flex-wrap gap-2">
-                        <Link
-                            :href="`/t/${tournament.public_code}/live`"
-                            class="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition hover:bg-white/10"
-                        >
-                            Live
-                        </Link>
-
-                        <Link
-                            :href="`/t/${tournament.public_code}/groups`"
-                            class="rounded-full bg-white px-4 py-2 text-sm font-medium text-zinc-950"
-                        >
-                            Grupe
-                        </Link>
-
-                        <Link
-                            :href="`/t/${tournament.public_code}/schedule`"
-                            class="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition hover:bg-white/10"
-                        >
-                            Raspored
-                        </Link>
-
-                        <Link
-                            :href="`/t/${tournament.public_code}/knockout`"
-                            class="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-200 transition hover:bg-white/10"
-                        >
-                            Nokaut
-                        </Link>
-                    </nav>
-
-                    <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                    <div
+                        class="flex max-w-[55%] flex-wrap justify-end gap-x-2 gap-y-1 text-[9px] md:max-w-none md:gap-2 md:text-xs"
+                    >
                         <span
-                            class="inline-flex rounded-full px-2.5 py-1"
-                            :class="{
-                                'bg-sky-500/15 text-sky-200': realtimeStatus === 'connected',
-                                'bg-emerald-500/15 text-emerald-200': realtimeStatus === 'updated',
-                                'bg-yellow-500/15 text-yellow-200': realtimeStatus === 'connecting',
-                                'bg-red-500/15 text-red-200': realtimeStatus === 'error',
-                            }"
+                            class="inline-flex items-center gap-1 font-medium text-emerald-200 md:rounded-full md:bg-emerald-500/15 md:px-2.5 md:py-1"
                         >
-                            Realtime:
-                            <template v-if="realtimeStatus === 'connecting'">
-                                povezivanje
-                            </template>
-
-                            <template v-else-if="realtimeStatus === 'connected'">
-                                aktivan
-                            </template>
-
-                            <template v-else-if="realtimeStatus === 'updated'">
-                                osveženo
-                            </template>
-
-                            <template v-else>
-                                greška
-                            </template>
+                            <span
+                                class="size-1.5 rounded-full bg-emerald-400 md:hidden"
+                            />
+                            Direktno
                         </span>
 
-                        <span v-if="lastRealtimeUpdateAt">
-                            Poslednja promena: {{ lastRealtimeUpdateAt }}
+                        <span
+                            v-if="tournament.has_repechage"
+                            class="inline-flex items-center gap-1 font-medium text-yellow-200 md:rounded-full md:bg-yellow-500/15 md:px-2.5 md:py-1"
+                        >
+                            <span
+                                class="size-1.5 rounded-full bg-yellow-400 md:hidden"
+                            />
+                            Repasaž
+                        </span>
+
+                        <span
+                            class="inline-flex items-center gap-1 font-medium text-red-200 md:rounded-full md:bg-red-500/15 md:px-2.5 md:py-1"
+                        >
+                            <span
+                                class="size-1.5 rounded-full bg-red-400 md:hidden"
+                            />
+                            {{ eliminationLegendLabel }}
                         </span>
                     </div>
                 </div>
-            </header>
 
-            <section
-                v-if="groups.length"
-                class="grid gap-6 xl:grid-cols-2"
-            >
-                <article
-                    v-for="group in groups"
-                    :key="group.id"
-                    class="rounded-3xl border border-white/10 bg-white/[0.03] p-5"
-                >
-                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                            <h2 class="text-2xl font-semibold">
-                                Grupa {{ group.name }}
-                            </h2>
+                <div class="mt-3 space-y-1.5 md:hidden">
+                    <div
+                        class="grid grid-cols-[1.25rem_minmax(0,1fr)_1.5rem_1.5rem_1.5rem_2.25rem_1.75rem] items-center gap-1 px-2 text-center text-[9px] font-semibold text-zinc-500 uppercase"
+                    >
+                        <span>#</span>
+                        <span class="text-left">Učesnik</span>
+                        <span>O</span>
+                        <span>P</span>
+                        <span>I</span>
+                        <span>+/-</span>
+                        <span>B</span>
+                    </div>
+                    <div
+                        v-for="row in group.rows"
+                        :key="row.participant_id"
+                        class="grid min-h-13 grid-cols-[1.25rem_minmax(0,1fr)_1.5rem_1.5rem_1.5rem_2.25rem_1.75rem] items-center gap-1 rounded-xl border px-2 py-2 text-center"
+                        :class="
+                            qualificationRowClasses(row.qualification_status)
+                        "
+                    >
+                        <span class="text-xs font-bold text-zinc-400">
+                            {{ row.position ?? '-' }}
+                        </span>
 
-                            <p class="mt-1 text-sm text-zinc-400">
-                                Odigrano {{ group.finished_matches_count }} / {{ group.matches_count }} mečeva
+                        <div class="min-w-0 text-left">
+                            <Link
+                                v-if="row.profile_url"
+                                :href="row.profile_url"
+                                class="line-clamp-2 text-[13px] leading-tight font-semibold"
+                                :class="
+                                    row.is_withdrawn
+                                        ? 'text-zinc-500 line-through'
+                                        : ''
+                                "
+                            >
+                                {{ row.display_name }}
+                            </Link>
+                            <p
+                                v-else
+                                class="line-clamp-2 text-[13px] leading-tight font-semibold"
+                                :class="
+                                    row.is_withdrawn
+                                        ? 'text-zinc-500 line-through'
+                                        : ''
+                                "
+                            >
+                                {{ row.display_name }}
                             </p>
                         </div>
 
-                        <div class="flex flex-wrap gap-2 text-xs">
-                            <span class="rounded-full bg-emerald-500/15 px-2.5 py-1 font-medium text-emerald-200">
-                                Direktno
-                            </span>
-
-                            <span class="rounded-full bg-yellow-500/15 px-2.5 py-1 font-medium text-yellow-200">
-                                Repasaž
-                            </span>
-
-                            <span class="rounded-full bg-zinc-700 px-2.5 py-1 font-medium text-zinc-300">
-                                Ispao
-                            </span>
-                        </div>
+                        <span class="text-xs text-zinc-300">{{
+                            row.played
+                        }}</span>
+                        <span class="text-xs text-zinc-300">{{
+                            row.wins
+                        }}</span>
+                        <span class="text-xs text-zinc-300">{{
+                            row.losses
+                        }}</span>
+                        <span class="text-xs font-medium">
+                            {{ differenceLabel(row.points_difference) }}
+                        </span>
+                        <strong class="text-sm">{{
+                            row.standing_points
+                        }}</strong>
                     </div>
+                </div>
 
-                    <div class="mt-5 overflow-hidden rounded-2xl border border-white/10">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm">
-                                <thead class="bg-white/5 text-zinc-400">
-                                    <tr>
-                                        <th class="px-3 py-3 font-medium">#</th>
-                                        <th class="px-3 py-3 font-medium">Učesnik</th>
-                                        <th class="px-3 py-3 text-center font-medium">O</th>
-                                        <th class="px-3 py-3 text-center font-medium">P</th>
-                                        <th class="px-3 py-3 text-center font-medium">I</th>
-                                        <th class="px-3 py-3 text-center font-medium">+/-</th>
-                                        <th class="px-3 py-3 text-center font-medium">Bod</th>
-                                        <th class="px-3 py-3 text-center font-medium">Status</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody>
-                                    <tr
-                                        v-for="row in group.rows"
-                                        :key="row.participant_id"
-                                        class="border-t border-white/10"
+                <div
+                    class="mt-5 hidden overflow-hidden rounded-2xl border border-white/10 md:block"
+                >
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm 2xl:text-lg">
+                            <thead class="bg-white/5 text-zinc-400">
+                                <tr>
+                                    <th class="px-3 py-3 font-medium">#</th>
+                                    <th class="px-3 py-3 font-medium">
+                                        Učesnik
+                                    </th>
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
                                     >
-                                        <td class="px-3 py-3 text-zinc-400">
-                                            {{ row.position ?? '-' }}
-                                        </td>
+                                        O
+                                    </th>
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
+                                        P
+                                    </th>
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
+                                        I
+                                    </th>
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
+                                        +/-
+                                    </th>
+                                    <th
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
+                                        Bod
+                                    </th>
+                                </tr>
+                            </thead>
 
-                                        <td class="px-3 py-3">
-                                            <div
-                                                class="font-medium"
-                                                :class="row.is_withdrawn ? 'text-zinc-500 line-through' : ''"
-                                            >
-                                                {{ row.display_name }}
-                                            </div>
+                            <tbody>
+                                <tr
+                                    v-for="row in group.rows"
+                                    :key="row.participant_id"
+                                    class="border-t border-white/10"
+                                    :class="
+                                        qualificationRowClasses(
+                                            row.qualification_status,
+                                        )
+                                    "
+                                >
+                                    <td class="px-3 py-3 text-zinc-400">
+                                        {{ row.position ?? '-' }}
+                                    </td>
 
-                                            <div class="mt-1 text-xs text-zinc-500">
-                                                {{ row.group_position ?? '-' }}
-                                            </div>
-                                        </td>
+                                    <td class="px-3 py-3">
+                                        <Link
+                                            v-if="row.profile_url"
+                                            :href="row.profile_url"
+                                            class="font-medium"
+                                            :class="
+                                                row.is_withdrawn
+                                                    ? 'text-zinc-500 line-through'
+                                                    : ''
+                                            "
+                                        >
+                                            {{ row.display_name }}
+                                        </Link>
+                                        <div
+                                            v-else
+                                            class="font-medium"
+                                            :class="
+                                                row.is_withdrawn
+                                                    ? 'text-zinc-500 line-through'
+                                                    : ''
+                                            "
+                                        >
+                                            {{ row.display_name }}
+                                        </div>
+                                    </td>
 
-                                        <td class="px-3 py-3 text-center text-zinc-300">
-                                            {{ row.played }}
-                                        </td>
+                                    <td
+                                        class="px-3 py-3 text-center text-zinc-300"
+                                    >
+                                        {{ row.played }}
+                                    </td>
 
-                                        <td class="px-3 py-3 text-center text-zinc-300">
-                                            {{ row.wins }}
-                                        </td>
+                                    <td
+                                        class="px-3 py-3 text-center text-zinc-300"
+                                    >
+                                        {{ row.wins }}
+                                    </td>
 
-                                        <td class="px-3 py-3 text-center text-zinc-300">
-                                            {{ row.losses }}
-                                        </td>
+                                    <td
+                                        class="px-3 py-3 text-center text-zinc-300"
+                                    >
+                                        {{ row.losses }}
+                                    </td>
 
-                                        <td class="px-3 py-3 text-center font-medium">
-                                            {{ differenceLabel(row.points_difference) }}
-                                        </td>
+                                    <td
+                                        class="px-3 py-3 text-center font-medium"
+                                    >
+                                        {{
+                                            differenceLabel(
+                                                row.points_difference,
+                                            )
+                                        }}
+                                    </td>
 
-                                        <td class="px-3 py-3 text-center font-semibold">
-                                            {{ row.standing_points }}
-                                        </td>
-
-                                        <td class="px-3 py-3 text-center">
-                                            <span
-                                                class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
-                                                :class="qualificationClasses(row.qualification_status)"
-                                            >
-                                                {{ row.qualification_label }}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                                    <td
+                                        class="px-3 py-3 text-center font-semibold"
+                                    >
+                                        {{ row.standing_points }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
+                </div>
 
-                    <div class="mt-6">
-                        <h3 class="text-lg font-semibold">
-                            Mečevi grupe {{ group.name }}
-                        </h3>
+                <details class="group mt-4 md:mt-6">
+                    <summary
+                        class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-white/10 px-3 py-2.5 md:px-4 md:py-3"
+                    >
+                        <div>
+                            <h3 class="text-sm font-semibold md:text-lg">
+                                Mečevi grupe {{ group.name }}
+                            </h3>
+                            <p class="mt-1 text-xs text-zinc-500">
+                                {{ group.matches.length }} mečeva
+                            </p>
+                        </div>
+                        <span class="text-sm text-zinc-400 group-open:hidden">
+                            Prikaži
+                        </span>
+                        <span
+                            class="hidden text-sm text-zinc-400 group-open:inline"
+                        >
+                            Sakrij
+                        </span>
+                    </summary>
 
+                    <div v-if="group.matches.length" class="mt-3 space-y-3">
                         <div
-                            v-if="group.matches.length"
-                            class="mt-3 space-y-3"
+                            v-for="match in group.matches"
+                            :key="match.id"
+                            class="rounded-xl border border-white/10 bg-black/30 p-3 md:rounded-2xl md:p-4"
                         >
                             <div
-                                v-for="match in group.matches"
-                                :key="match.id"
-                                class="rounded-2xl border border-white/10 bg-black/30 p-4"
+                                class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 md:gap-3"
                             >
-                                <div class="flex items-center justify-between gap-3">
-                                    <p class="text-sm text-zinc-400">
-                                        {{ match.resource_name ?? 'Bez resource-a' }}
-                                    </p>
-
-                                    <span
-                                        class="rounded-full px-2.5 py-1 text-xs font-medium"
-                                        :class="matchStatusClasses(match.status)"
+                                <div>
+                                    <p
+                                        class="line-clamp-2 text-sm leading-tight font-semibold md:text-base 2xl:text-2xl"
+                                        :class="
+                                            match.winner?.id ===
+                                            match.participant_a?.id
+                                                ? 'text-emerald-200'
+                                                : ''
+                                        "
                                     >
-                                        {{ match.status_label }}
-                                    </span>
+                                        {{
+                                            match.participant_a?.display_name ??
+                                            '—'
+                                        }}
+                                    </p>
                                 </div>
 
-                                <div class="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-                                    <div>
-                                        <p
-                                            class="font-semibold"
-                                            :class="match.winner?.id === match.participant_a?.id ? 'text-emerald-200' : ''"
-                                        >
-                                            {{ match.participant_a?.display_name ?? 'TBD' }}
-                                        </p>
-
-                                        <p class="mt-1 text-xs text-zinc-500">
-                                            {{ match.participant_a?.group_position ?? '-' }}
-                                        </p>
-                                    </div>
-
-                                    <div class="rounded-xl bg-white/10 px-3 py-1 text-lg font-semibold">
-                                        {{ match.score_a ?? '-' }} : {{ match.score_b ?? '-' }}
-                                    </div>
-
-                                    <div class="text-right">
-                                        <p
-                                            class="font-semibold"
-                                            :class="match.winner?.id === match.participant_b?.id ? 'text-emerald-200' : ''"
-                                        >
-                                            {{ match.participant_b?.display_name ?? 'TBD' }}
-                                        </p>
-
-                                        <p class="mt-1 text-xs text-zinc-500">
-                                            {{ match.participant_b?.group_position ?? '-' }}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <p
-                                    v-if="match.winner"
-                                    class="mt-2 text-sm text-emerald-200"
+                                <div
+                                    class="rounded-lg bg-white/10 px-2 py-1 text-base font-bold md:rounded-xl md:px-3 md:text-lg 2xl:text-3xl"
                                 >
-                                    Pobednik: {{ match.winner.display_name }}
-                                </p>
+                                    {{ match.score_a ?? '-' }} :
+                                    {{ match.score_b ?? '-' }}
+                                </div>
+
+                                <div class="text-right">
+                                    <p
+                                        class="line-clamp-2 text-sm leading-tight font-semibold md:text-base 2xl:text-2xl"
+                                        :class="
+                                            match.winner?.id ===
+                                            match.participant_b?.id
+                                                ? 'text-emerald-200'
+                                                : ''
+                                        "
+                                    >
+                                        {{
+                                            match.participant_b?.display_name ??
+                                            '—'
+                                        }}
+                                    </p>
+                                </div>
                             </div>
                         </div>
-
-                        <p
-                            v-else
-                            class="mt-3 rounded-2xl border border-dashed border-white/10 p-4 text-sm text-zinc-400"
-                        >
-                            Još nema generisanih mečeva za ovu grupu.
-                        </p>
                     </div>
-                </article>
-            </section>
 
-            <section
-                v-else
-                class="rounded-3xl border border-dashed border-white/10 p-6 text-zinc-400"
-            >
-                Još nema grupa za prikaz.
-            </section>
-        </main>
-    </div>
+                    <p
+                        v-else
+                        class="mt-3 rounded-2xl border border-dashed border-white/10 p-4 text-sm text-zinc-400"
+                    >
+                        Još nema generisanih mečeva za ovu grupu.
+                    </p>
+                </details>
+            </article>
+        </section>
+
+        <section
+            v-else
+            class="rounded-3xl border border-dashed border-white/10 p-6 text-zinc-400"
+        >
+            Još nema grupa za prikaz.
+        </section>
+    </PublicTournamentLayout>
 </template>

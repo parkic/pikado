@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/vue3';
 import { reactive, ref } from 'vue';
+import { toast } from 'vue-sonner';
 
 import type {
     TournamentScheduleMatch,
@@ -10,28 +11,24 @@ type UseTournamentScheduleMatchesOptions = {
     matches: TournamentScheduleMatch[];
     matchResourceUrl: (matchId: number) => string;
     matchResultUrl: (matchId: number) => string;
+    matchPostponementUrl: (matchId: number) => string;
 };
 
 export const useTournamentScheduleMatches = ({
     matches,
     matchResourceUrl,
     matchResultUrl,
+    matchPostponementUrl,
 }: UseTournamentScheduleMatchesOptions) => {
-    const resultForms = reactive<
-        Record<number, TournamentScheduleResultForm>
-    >(
+    const resultForms = reactive<Record<number, TournamentScheduleResultForm>>(
         Object.fromEntries(
             matches.map((match) => [
                 match.id,
                 {
                     score_a:
-                        match.score_a !== null
-                            ? String(match.score_a)
-                            : '',
+                        match.score_a !== null ? String(match.score_a) : '',
                     score_b:
-                        match.score_b !== null
-                            ? String(match.score_b)
-                            : '',
+                        match.score_b !== null ? String(match.score_b) : '',
                     winner_participant_id: match.winner
                         ? String(match.winner.id)
                         : '',
@@ -40,9 +37,7 @@ export const useTournamentScheduleMatches = ({
         ),
     );
 
-    const tieBreakerMatch = ref<
-        TournamentScheduleMatch | null
-    >(null);
+    const tieBreakerMatch = ref<TournamentScheduleMatch | null>(null);
 
     const updateMatchResource = (
         match: TournamentScheduleMatch,
@@ -64,20 +59,21 @@ export const useTournamentScheduleMatches = ({
         );
     };
 
-    const isDrawResult = (
-        match: TournamentScheduleMatch,
-    ): boolean => {
+    const isDrawResult = (match: TournamentScheduleMatch): boolean => {
         const resultForm = resultForms[match.id];
 
-        if (
-            resultForm.score_a === ''
-            || resultForm.score_b === ''
-        ) {
+        if (resultForm.score_a === '' || resultForm.score_b === '') {
             return false;
         }
 
-        return Number(resultForm.score_a)
-            === Number(resultForm.score_b);
+        return Number(resultForm.score_a) === Number(resultForm.score_b);
+    };
+
+    const normalizeResult = (match: TournamentScheduleMatch) => {
+        const resultForm = resultForms[match.id];
+
+        resultForm.score_a = resultForm.score_a.trim() || '0';
+        resultForm.score_b = resultForm.score_b.trim() || '0';
     };
 
     const submitMatchResult = (
@@ -91,8 +87,7 @@ export const useTournamentScheduleMatches = ({
             {
                 score_a: resultForm.score_a,
                 score_b: resultForm.score_b,
-                winner_participant_id:
-                    resultForm.winner_participant_id || null,
+                winner_participant_id: resultForm.winner_participant_id || null,
             },
             {
                 preserveScroll: true,
@@ -102,38 +97,35 @@ export const useTournamentScheduleMatches = ({
         );
     };
 
-    const openTieBreakerModal = (
-        match: TournamentScheduleMatch,
-    ) => {
+    const openTieBreakerModal = (match: TournamentScheduleMatch) => {
         const resultForm = resultForms[match.id];
 
-        if (
-            !resultForm.winner_participant_id
-            && match.winner
-        ) {
-            resultForm.winner_participant_id = String(
-                match.winner.id,
-            );
+        if (!resultForm.winner_participant_id && match.winner) {
+            resultForm.winner_participant_id = String(match.winner.id);
         }
 
         tieBreakerMatch.value = match;
     };
 
-    const updateMatchResult = (
-        match: TournamentScheduleMatch,
-    ) => {
+    const updateMatchResult = (match: TournamentScheduleMatch) => {
+        normalizeResult(match);
         const resultForm = resultForms[match.id];
 
-        if (
-            isDrawResult(match)
-            && !resultForm.winner_participant_id
-        ) {
+        if (isDrawResult(match) && !resultForm.winner_participant_id) {
             openTieBreakerModal(match);
 
             return;
         }
 
         submitMatchResult(match);
+    };
+
+    const toggleMatchPostponement = (match: TournamentScheduleMatch) => {
+        router.patch(
+            matchPostponementUrl(match.id),
+            { postponed: match.status !== 'postponed' },
+            { preserveScroll: true },
+        );
     };
 
     const closeTieBreakerModal = () => {
@@ -144,8 +136,7 @@ export const useTournamentScheduleMatches = ({
         match: TournamentScheduleMatch,
         participantId: number,
     ) => {
-        resultForms[match.id].winner_participant_id =
-            String(participantId);
+        resultForms[match.id].winner_participant_id = String(participantId);
     };
 
     const saveTieBreakerWinner = () => {
@@ -157,7 +148,7 @@ export const useTournamentScheduleMatches = ({
         const resultForm = resultForms[match.id];
 
         if (!resultForm.winner_participant_id) {
-            window.alert('Moraš da izabereš pobednika.');
+            toast.error('Izaberi pobednika pre čuvanja rezultata.');
 
             return;
         }
@@ -182,6 +173,7 @@ export const useTournamentScheduleMatches = ({
         updateMatchResource,
         openTieBreakerModal,
         updateMatchResult,
+        toggleMatchPostponement,
         closeTieBreakerModal,
         chooseTieBreakerWinner,
         saveTieBreakerWinner,

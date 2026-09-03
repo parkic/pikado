@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue';
+import { normalizeSearchText } from '@/lib/normalizeSearchText';
 
 import type {
     TournamentGroupDrawFormData,
@@ -20,32 +21,26 @@ export const useTournamentGroupDrawSearch = ({
     const playerSearch = ref('');
     const teamSearch = ref('');
 
-    const filteredAvailablePlayers = computed<
-        TournamentGroupDrawPlayer[]
-    >(() => {
-        const search = playerSearch.value
-            .trim()
-            .toLowerCase();
+    const filteredAvailablePlayers = computed<TournamentGroupDrawPlayer[]>(
+        () => {
+            const search = normalizeSearchText(playerSearch.value);
 
-        if (!search) {
-            return availablePlayers().slice(0, 8);
-        }
+            if (!search) {
+                return availablePlayers().slice(0, 8);
+            }
 
-        return availablePlayers()
-            .filter((player) => {
-                return player.display_name
-                    .toLowerCase()
-                    .includes(search);
-            })
-            .slice(0, 8);
-    });
+            return availablePlayers()
+                .filter((player) => {
+                    return normalizeSearchText(player.display_name).includes(
+                        search,
+                    );
+                })
+                .slice(0, 8);
+        },
+    );
 
-    const filteredAvailableTeams = computed<
-        TournamentGroupDrawTeam[]
-    >(() => {
-        const search = teamSearch.value
-            .trim()
-            .toLowerCase();
+    const filteredAvailableTeams = computed<TournamentGroupDrawTeam[]>(() => {
+        const search = normalizeSearchText(teamSearch.value);
 
         if (!search) {
             return availableTeams().slice(0, 8);
@@ -53,9 +48,7 @@ export const useTournamentGroupDrawSearch = ({
 
         return availableTeams()
             .filter((team) => {
-                return team.name
-                    .toLowerCase()
-                    .includes(search);
+                return normalizeSearchText(team.name).includes(search);
             })
             .slice(0, 8);
     });
@@ -68,17 +61,15 @@ export const useTournamentGroupDrawSearch = ({
         });
     });
 
-    const selectedExistingTeam = computed<
-        TournamentGroupDrawTeam | undefined
-    >(() => {
-        return availableTeams().find((team) => {
-            return team.id === form.existing_team_id;
-        });
-    });
+    const selectedExistingTeam = computed<TournamentGroupDrawTeam | undefined>(
+        () => {
+            return availableTeams().find((team) => {
+                return team.id === form.existing_team_id;
+            });
+        },
+    );
 
-    const chooseExistingPlayer = (
-        player: TournamentGroupDrawPlayer,
-    ) => {
+    const chooseExistingPlayer = (player: TournamentGroupDrawPlayer) => {
         form.existing_player_id = player.id;
         form.first_name = player.first_name;
         form.last_name = player.last_name;
@@ -96,9 +87,7 @@ export const useTournamentGroupDrawSearch = ({
         playerSearch.value = '';
     };
 
-    const chooseExistingTeam = (
-        team: TournamentGroupDrawTeam,
-    ) => {
+    const chooseExistingTeam = (team: TournamentGroupDrawTeam) => {
         form.existing_team_id = team.id;
         form.team_name = team.name;
 

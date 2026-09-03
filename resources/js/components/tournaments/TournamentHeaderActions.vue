@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { Trash2 } from '@lucide/vue';
 
 import type { TournamentRoutes } from '@/lib/tournamentRoutes';
 import type { TournamentStatus } from '@/types/tournament';
@@ -7,6 +8,7 @@ import type { TournamentStatus } from '@/types/tournament';
 defineProps<{
     status: TournamentStatus;
     canGenerateGroupMatches: boolean;
+    canDelete: boolean;
     publicEnabled: boolean;
     tournamentsUrl: string;
     publicUrl: string;
@@ -15,6 +17,7 @@ defineProps<{
 
 const emit = defineEmits<{
     'generate-group-matches': [];
+    'delete-tournament': [];
 }>();
 </script>
 
@@ -116,6 +119,16 @@ const emit = defineEmits<{
         target="_blank"
         class="inline-flex items-center justify-center rounded-lg border border-emerald-600/40 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-500/10 dark:text-emerald-300"
     >
-        Public prikaz
+        Javni prikaz
     </Link>
+
+    <button
+        v-if="canDelete"
+        type="button"
+        class="inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/35 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-500/10 dark:text-red-400"
+        @click="emit('delete-tournament')"
+    >
+        <Trash2 class="size-4" />
+        Obriši turnir
+    </button>
 </template>

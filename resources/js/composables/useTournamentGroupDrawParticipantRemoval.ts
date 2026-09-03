@@ -1,36 +1,34 @@
 import { router } from '@inertiajs/vue3';
 
-import type {
-    TournamentGroupParticipant,
-} from '@/types/tournament';
+import { confirmAction } from '@/composables/useConfirmDialog';
+import type { TournamentGroupParticipant } from '@/types/tournament';
 
 type UseTournamentGroupDrawParticipantRemovalOptions = {
-    participantDeleteUrl: (
-        participantId: number,
-    ) => string;
+    participantDeleteUrl: (participantId: number) => string;
 };
 
 export const useTournamentGroupDrawParticipantRemoval = ({
     participantDeleteUrl,
 }: UseTournamentGroupDrawParticipantRemovalOptions) => {
-    const removeParticipant = (
+    const removeParticipant = async (
         participant: TournamentGroupParticipant | undefined,
     ) => {
         if (!participant) {
             return;
         }
 
-        const confirmed = window.confirm(
-            `Da li želiš da ukloniš ${participant.display_name} iz ${participant.group_position}?`,
-        );
+        const confirmed = await confirmAction({
+            title: 'Izbriši učesnika iz grupe?',
+            description: `${participant.display_name} će biti izbrisan sa pozicije ${participant.group_position}. Njegovi neodigrani mečevi ostaju skriveni na istim mestima u rasporedu, spremni za novog učesnika.`,
+            confirmLabel: 'Izbriši učesnika',
+            variant: 'destructive',
+        });
 
         if (!confirmed) {
             return;
         }
 
-        router.delete(
-            participantDeleteUrl(participant.id),
-        );
+        router.delete(participantDeleteUrl(participant.id));
     };
 
     return {

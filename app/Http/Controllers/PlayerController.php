@@ -2,22 +2,31 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Player;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
-use App\Models\Venue;
-use App\Models\Player;
-
 class PlayerController extends Controller
 {
-    public function index(Request $request, Venue $venue): Response
+    public function index(Request $request): Response
     {
-        $user = $request->user();
+        $this->authorizeManagement($request);
 
-        abort_unless($user->canAccessVenue($venue), 403);
-
-        $players = $venue->players()
+        $players = Player::query()
+            ->select('players.*')
+            ->selectSub(
+                fn ($query) => $query
+                    ->from('tournament_participants')
+                    ->join('tournaments', 'tournaments.id', '=', 'tournament_participants.tournament_id')
+                    ->whereColumn('tournament_participants.player_id', 'players.id')
+                    ->whereNull('tournament_participants.deleted_at')
+                    ->whereNull('tournaments.deleted_at')
+                    ->selectRaw('COUNT(DISTINCT tournaments.venue_id)'),
+                'venues_count',
+            )
+            ->withCount('tournamentParticipants')
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->orderBy('id')
@@ -29,38 +38,27 @@ class PlayerController extends Controller
                 'nickname' => $player->nickname,
                 'notes' => $player->notes,
                 'is_active' => $player->is_active,
+                'tournaments_count' => $player->tournament_participants_count,
+                'venues_count' => (int) $player->venues_count,
+                'public_url' => route('public.players.show', $player, false),
+                'can_delete' => $player->tournament_participants_count === 0,
             ]);
 
         return Inertia::render('Venues/Players/Index', [
-            'venue' => [
-                'id' => $venue->id,
-                'name' => $venue->name,
-                'slug' => $venue->slug,
-            ],
             'players' => $players,
         ]);
     }
 
-    public function create(Request $request, Venue $venue): Response
+    public function create(Request $request): Response
     {
-        $user = $request->user();
+        $this->authorizeManagement($request);
 
-        abort_unless($user->canAccessVenue($venue), 403);
-
-        return Inertia::render('Venues/Players/Create', [
-            'venue' => [
-                'id' => $venue->id,
-                'name' => $venue->name,
-                'slug' => $venue->slug,
-            ],
-        ]);
+        return Inertia::render('Venues/Players/Create');
     }
 
-    public function store(Request $request, Venue $venue)
+    public function store(Request $request): RedirectResponse
     {
-        $user = $request->user();
-
-        abort_unless($user->canAccessVenue($venue), 403);
+        $this->authorizeManagement($request);
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
@@ -70,32 +68,24 @@ class PlayerController extends Controller
             'is_active' => ['required', 'boolean'],
         ]);
 
-        $venue->players()->create([
-            'first_name' => $validated['first_name'],
-            'last_name' => $validated['last_name'],
-            'nickname' => $validated['nickname'],
-            'notes' => $validated['notes'],
+        Player::query()->create([
+            'first_name' => trim($validated['first_name']),
+            'last_name' => trim($validated['last_name']),
+            'nickname' => filled($validated['nickname'] ?? null) ? trim($validated['nickname']) : null,
+            'notes' => filled($validated['notes'] ?? null) ? trim($validated['notes']) : null,
             'is_active' => $validated['is_active'],
         ]);
 
         return redirect()
-            ->route('venues.players.index', ['venue' => $venue->slug])
+            ->route('players.index')
             ->with('success', 'Igrač je uspešno dodat.');
     }
 
-    public function edit(Request $request, Venue $venue, Player $player): Response
+    public function edit(Request $request, Player $player): Response
     {
-        $user = $request->user();
-
-        abort_unless($user->canAccessVenue($venue), 403);
-        abort_unless($player->venue_id === $venue->id, 404);
+        $this->authorizeManagement($request);
 
         return Inertia::render('Venues/Players/Edit', [
-            'venue' => [
-                'id' => $venue->id,
-                'name' => $venue->name,
-                'slug' => $venue->slug,
-            ],
             'player' => [
                 'id' => $player->id,
                 'first_name' => $player->first_name,
@@ -107,12 +97,9 @@ class PlayerController extends Controller
         ]);
     }
 
-    public function update(Request $request, Venue $venue, Player $player)
+    public function update(Request $request, Player $player): RedirectResponse
     {
-        $user = $request->user();
-
-        abort_unless($user->canAccessVenue($venue), 403);
-        abort_unless($player->venue_id === $venue->id, 404);
+        $this->authorizeManagement($request);
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
@@ -123,29 +110,37 @@ class PlayerController extends Controller
         ]);
 
         $player->update([
-            'first_name' => $validated['first_name'],
-            'last_name' => $validated['last_name'],
-            'nickname' => $validated['nickname'],
-            'notes' => $validated['notes'],
+            'first_name' => trim($validated['first_name']),
+            'last_name' => trim($validated['last_name']),
+            'nickname' => filled($validated['nickname'] ?? null) ? trim($validated['nickname']) : null,
+            'notes' => filled($validated['notes'] ?? null) ? trim($validated['notes']) : null,
             'is_active' => $validated['is_active'],
         ]);
 
         return redirect()
-            ->route('venues.players.index', ['venue' => $venue->slug])
+            ->route('players.index')
             ->with('success', 'Igrač je uspešno izmenjen.');
     }
 
-    public function destroy(Request $request, Venue $venue, Player $player)
+    public function destroy(Request $request, Player $player): RedirectResponse
     {
-        $user = $request->user();
+        $this->authorizeManagement($request);
 
-        abort_unless($user->canAccessVenue($venue), 403);
-        abort_unless($player->venue_id === $venue->id, 404);
+        if ($player->tournamentParticipants()->withTrashed()->exists()) {
+            return back()->withErrors([
+                'player' => 'Igrač ima istoriju turnira i ne može biti obrisan. Možeš ga označiti kao neaktivnog.',
+            ]);
+        }
 
         $player->delete();
 
         return redirect()
-            ->route('venues.players.index', ['venue' => $venue->slug])
+            ->route('players.index')
             ->with('success', 'Igrač je uspešno obrisan.');
+    }
+
+    private function authorizeManagement(Request $request): void
+    {
+        abort_unless($request->user()->canManagePlayers(), 403);
     }
 }

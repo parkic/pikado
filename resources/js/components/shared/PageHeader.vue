@@ -13,12 +13,11 @@ withDefaults(
 </script>
 
 <template>
-    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+    <div
+        class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"
+    >
         <div class="min-w-0">
-            <p
-                v-if="eyebrow"
-                class="text-sm text-muted-foreground"
-            >
+            <p v-if="eyebrow" class="text-sm text-muted-foreground">
                 {{ eyebrow }}
             </p>
 

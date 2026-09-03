@@ -3,13 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Enums\MatchMode;
+use App\Enums\MatchStage;
+use App\Enums\MatchStatus;
 use App\Enums\ParticipantStatus;
 use App\Enums\ParticipantType;
 use App\Enums\TournamentStatus;
-use App\Enums\MatchStage;
-use App\Enums\MatchStatus;
 use App\Events\TournamentLiveUpdated;
-
 use App\Models\Player;
 use App\Models\Team;
 use App\Models\Tournament;
@@ -17,14 +16,12 @@ use App\Models\TournamentGroup;
 use App\Models\TournamentMatch;
 use App\Models\TournamentParticipant;
 use App\Models\Venue;
-
 use App\Services\GroupMatchGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -69,7 +66,7 @@ class TournamentGroupDrawController extends Controller
                     'slot_number' => $nextSlot['slot_number'],
                     'group_position' => $nextSlot['group_position'],
                 ] : null,
-                'groups' => $tournament->groups->map(fn(TournamentGroup $group) => [
+                'groups' => $tournament->groups->map(fn (TournamentGroup $group) => [
                     'id' => $group->id,
                     'name' => $group->name,
                     'sort_order' => $group->sort_order,
@@ -84,10 +81,16 @@ class TournamentGroupDrawController extends Controller
                             $participant,
                             $replacementMatches,
                         ) === null,
+                        'can_remove' => $this->participantReplacementValidationError(
+                            $tournament,
+                            $participant,
+                            $replacementMatches,
+                        ) === null,
                     ]),
                 ]),
+                'can_manage_withdrawals' => $this->canManageWithdrawals($user, $venue),
             ],
-            'available_players' => $this->availablePlayers($venue, $tournament),
+            'available_players' => $this->availablePlayers($tournament),
             'available_teams' => $this->availableTeams($venue, $tournament),
         ]);
     }
@@ -122,8 +125,8 @@ class TournamentGroupDrawController extends Controller
 
         if (
             $tournament->participants()
-            ->where('group_position', $targetSlot['group_position'])
-            ->exists()
+                ->where('group_position', $targetSlot['group_position'])
+                ->exists()
         ) {
             return back()
                 ->withErrors([
@@ -182,7 +185,6 @@ class TournamentGroupDrawController extends Controller
                 === MatchMode::SINGLES
             ) {
                 $this->storePlayerParticipant(
-                    $venue,
                     $tournament,
                     $targetSlot,
                     $validated,
@@ -219,9 +221,14 @@ class TournamentGroupDrawController extends Controller
 
         $this->syncParticipantRosterStatus($tournament);
 
+        event(new TournamentLiveUpdated(
+            $tournament->fresh(),
+            'participant_added',
+        ));
+
         $successMessage = 'Učesnik je dodat u '
-            . $targetSlot['group_position']
-            . '.';
+            .$targetSlot['group_position']
+            .'.';
 
         if (
             $tournament->status
@@ -239,7 +246,7 @@ class TournamentGroupDrawController extends Controller
         }
 
         return redirect()
-            ->route('venues.tournaments.group_draw.show', [$venue, $tournament],)
+            ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
             ->with('success', $successMessage);
     }
 
@@ -257,19 +264,78 @@ class TournamentGroupDrawController extends Controller
 
         if (! $this->canManageParticipantRoster($tournament)) {
             return back()->withErrors([
-                'participant' => 'Učesnici ne mogu da se uklanjaju nakon početka grupne faze.',
+                'participant' => 'Učesnici ne mogu da se uklanjaju u trenutnoj fazi turnira.',
             ]);
         }
 
         $groupPosition = $participant->group_position;
 
-        $participant->delete();
+        $matches = TournamentMatch::withoutGlobalScope('visible_matches')
+            ->where('tournament_id', $tournament->id)
+            ->where('stage', MatchStage::GROUP->value)
+            ->get();
+
+        $removalError = $this->participantReplacementValidationError(
+            $tournament,
+            $participant,
+            $matches,
+        );
+
+        if ($removalError !== null) {
+            return back()->withErrors([
+                'participant' => $removalError.' Umesto uklanjanja označi učesnika kao odustalog.',
+            ]);
+        }
+
+        DB::transaction(function () use ($tournament, $participant, $matches): void {
+            if ($tournament->status === TournamentStatus::GROUP_STAGE) {
+                $participantMatches = $matches->filter(
+                    fn (TournamentMatch $match): bool => (int) $match->participant_a_id === $participant->id
+                        || (int) $match->participant_b_id === $participant->id
+                );
+
+                foreach ($participantMatches as $match) {
+                    $updates = [
+                        'is_hidden' => true,
+                        'score_a' => null,
+                        'score_b' => null,
+                        'winner_participant_id' => null,
+                        'loser_participant_id' => null,
+                        'status' => MatchStatus::SCHEDULED,
+                        'win_reason' => null,
+                        'meta' => null,
+                        'started_at' => null,
+                        'finished_at' => null,
+                    ];
+
+                    if ((int) $match->participant_a_id === $participant->id) {
+                        $updates['participant_a_id'] = null;
+                    }
+
+                    if ((int) $match->participant_b_id === $participant->id) {
+                        $updates['participant_b_id'] = null;
+                    }
+
+                    $match->update($updates);
+                }
+            }
+
+            $participant->delete();
+        });
 
         $this->syncParticipantRosterStatus($tournament);
 
+        event(new TournamentLiveUpdated(
+            $tournament->fresh(),
+            'participant_removed',
+        ));
+
         return redirect()
             ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
-            ->with('success', 'Učesnik je uklonjen iz ' . $groupPosition . '.');
+            ->with(
+                'success',
+                'Učesnik je uklonjen iz '.$groupPosition.'. Rezervisani mečevi tog slota ostaju skriveni do novog unosa.',
+            );
     }
 
     public function editParticipant(
@@ -364,7 +430,7 @@ class TournamentGroupDrawController extends Controller
                 'status' => $participant->status->value,
                 'display_name' => $this->participantDisplayName($participant),
             ],
-            'available_players' => $this->availablePlayers($venue, $tournament),
+            'available_players' => $this->availablePlayers($tournament),
             'available_teams' => $this->availableTeams($venue, $tournament),
         ]);
     }
@@ -401,7 +467,6 @@ class TournamentGroupDrawController extends Controller
             ]);
 
             $replacementPlayer = $this->resolveReplacementPlayer(
-                $venue,
                 $tournament,
                 $participant,
                 $validated,
@@ -412,6 +477,11 @@ class TournamentGroupDrawController extends Controller
                 $participant,
                 $replacementPlayer
             ): void {
+                $this->forgetRemovedPlayerParticipant(
+                    $tournament,
+                    $participant,
+                    $replacementPlayer,
+                );
                 $this->restoreMatchesVoidedByParticipant($tournament, $participant);
 
                 $participant->update([
@@ -444,6 +514,11 @@ class TournamentGroupDrawController extends Controller
                 $participant,
                 $replacementTeam
             ): void {
+                $this->forgetRemovedTeamParticipant(
+                    $tournament,
+                    $participant,
+                    $replacementTeam,
+                );
                 $this->restoreMatchesVoidedByParticipant($tournament, $participant);
 
                 $participant->update([
@@ -469,7 +544,7 @@ class TournamentGroupDrawController extends Controller
             ->route('venues.tournaments.group_draw.show', [$venue, $tournament])
             ->with(
                 'success',
-                'Učesnik u slotu ' . $participant->group_position . ' je uspešno zamenjen.',
+                'Učesnik u slotu '.$participant->group_position.' je uspešno zamenjen.',
             );
     }
 
@@ -521,14 +596,13 @@ class TournamentGroupDrawController extends Controller
             ->with('success', 'Učesnik je izmenjen.');
     }
 
-    private function storePlayerParticipant(Venue $venue, Tournament $tournament, array $nextSlot, array $validated): void
+    private function storePlayerParticipant(Tournament $tournament, array $nextSlot, array $validated): void
     {
-        DB::transaction(function () use ($venue, $tournament, $nextSlot, $validated): void {
+        DB::transaction(function () use ($tournament, $nextSlot, $validated): void {
             $existingPlayerId = $validated['existing_player_id'] ?? null;
 
             if ($existingPlayerId) {
                 $player = Player::query()
-                    ->where('venue_id', $venue->id)
                     ->where('is_active', true)
                     ->findOrFail($existingPlayerId);
             } else {
@@ -538,35 +612,21 @@ class TournamentGroupDrawController extends Controller
                     ? trim((string) $validated['nickname'])
                     : null;
 
-                $playerQuery = Player::query()
-                    ->where('venue_id', $venue->id)
-                    ->where('first_name', $firstName)
-                    ->where('last_name', $lastName);
-
-                if ($nickname === null) {
-                    $playerQuery->whereNull('nickname');
-                } else {
-                    $playerQuery->where('nickname', $nickname);
-                }
-
-                $player = $playerQuery->first();
-
-                if (! $player) {
-                    $player = Player::create([
-                        'venue_id' => $venue->id,
-                        'first_name' => $firstName,
-                        'last_name' => $lastName,
-                        'nickname' => $nickname,
-                        'is_active' => true,
-                    ]);
-                }
+                // A matching name is not proof that this is the same human.
+                // Reuse only happens when an admin explicitly selects an existing profile.
+                $player = Player::create([
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
+                    'nickname' => $nickname,
+                    'is_active' => true,
+                ]);
             }
 
             if (
                 $tournament->participants()
-                ->where('participant_type', ParticipantType::PLAYER->value)
-                ->where('player_id', $player->id)
-                ->exists()
+                    ->where('participant_type', ParticipantType::PLAYER->value)
+                    ->where('player_id', $player->id)
+                    ->exists()
             ) {
                 throw ValidationException::withMessages([
                     'existing_player_id' => 'Ovaj igrač je već dodat u turnir.',
@@ -578,6 +638,19 @@ class TournamentGroupDrawController extends Controller
                 ->withTrashed()
                 ->where('group_position', $nextSlot['group_position'])
                 ->first();
+            $removedPlayerParticipant = $tournament->participants()
+                ->onlyTrashed()
+                ->where('participant_type', ParticipantType::PLAYER->value)
+                ->where('player_id', $player->id)
+                ->first();
+
+            if (
+                $removedPlayerParticipant
+                && (! $slotParticipant || $removedPlayerParticipant->id !== $slotParticipant->id)
+            ) {
+                $slotParticipant?->forceDelete();
+                $slotParticipant = $removedPlayerParticipant;
+            }
 
             if ($slotParticipant) {
                 $slotParticipant->forceFill([
@@ -641,9 +714,9 @@ class TournamentGroupDrawController extends Controller
 
             if (
                 $tournament->participants()
-                ->where('participant_type', ParticipantType::TEAM->value)
-                ->where('team_id', $team->id)
-                ->exists()
+                    ->where('participant_type', ParticipantType::TEAM->value)
+                    ->where('team_id', $team->id)
+                    ->exists()
             ) {
                 throw ValidationException::withMessages([
                     'existing_team_id' => 'Ova ekipa je već dodata u turnir.',
@@ -655,6 +728,19 @@ class TournamentGroupDrawController extends Controller
                 ->withTrashed()
                 ->where('group_position', $nextSlot['group_position'])
                 ->first();
+            $removedTeamParticipant = $tournament->participants()
+                ->onlyTrashed()
+                ->where('participant_type', ParticipantType::TEAM->value)
+                ->where('team_id', $team->id)
+                ->first();
+
+            if (
+                $removedTeamParticipant
+                && (! $slotParticipant || $removedTeamParticipant->id !== $slotParticipant->id)
+            ) {
+                $slotParticipant?->forceDelete();
+                $slotParticipant = $removedTeamParticipant;
+            }
 
             if ($slotParticipant) {
                 $slotParticipant->forceFill([
@@ -692,10 +778,10 @@ class TournamentGroupDrawController extends Controller
     private function loadTournamentForDraw(Tournament $tournament): void
     {
         $tournament->load([
-            'groups' => fn($query) => $query
+            'groups' => fn ($query) => $query
                 ->orderBy('sort_order')
                 ->orderBy('name'),
-            'groups.participants' => fn($query) => $query
+            'groups.participants' => fn ($query) => $query
                 ->orderBy('group_position')
                 ->orderBy('id'),
             'groups.participants.player',
@@ -718,7 +804,7 @@ class TournamentGroupDrawController extends Controller
 
         foreach (range(1, $groupSize) as $slotNumber) {
             foreach ($tournament->groups as $group) {
-                $groupPosition = $group->name . $slotNumber;
+                $groupPosition = $group->name.$slotNumber;
 
                 if (! in_array($groupPosition, $filledPositions, true)) {
                     return [
@@ -743,10 +829,10 @@ class TournamentGroupDrawController extends Controller
     private function participantDisplayName(TournamentParticipant $participant): string
     {
         if ($participant->player) {
-            $name = trim($participant->player->first_name . ' ' . $participant->player->last_name);
+            $name = trim($participant->player->first_name.' '.$participant->player->last_name);
 
             if ($participant->player->nickname) {
-                return $name . ' (' . $participant->player->nickname . ')';
+                return $name.' ('.$participant->player->nickname.')';
             }
 
             return $name;
@@ -789,11 +875,11 @@ class TournamentGroupDrawController extends Controller
         return [
             'group' => $group,
             'slot_number' => $slotNumber,
-            'group_position' => $groupName . $slotNumber,
+            'group_position' => $groupName.$slotNumber,
         ];
     }
 
-    private function availablePlayers(Venue $venue, Tournament $tournament): array
+    private function availablePlayers(Tournament $tournament): array
     {
         $usedPlayerIds = $tournament->participants()
             ->where('participant_type', ParticipantType::PLAYER->value)
@@ -801,20 +887,19 @@ class TournamentGroupDrawController extends Controller
             ->pluck('player_id');
 
         return Player::query()
-            ->where('venue_id', $venue->id)
             ->where('is_active', true)
             ->whereNotIn('id', $usedPlayerIds)
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->orderBy('nickname')
             ->get()
-            ->map(fn(Player $player) => [
+            ->map(fn (Player $player) => [
                 'id' => $player->id,
                 'first_name' => $player->first_name,
                 'last_name' => $player->last_name,
                 'nickname' => $player->nickname,
-                'display_name' => trim($player->first_name . ' ' . $player->last_name)
-                    . ($player->nickname ? ' (' . $player->nickname . ')' : ''),
+                'display_name' => trim($player->first_name.' '.$player->last_name)
+                    .($player->nickname ? ' ('.$player->nickname.')' : ''),
             ])
             ->values()
             ->all();
@@ -833,7 +918,7 @@ class TournamentGroupDrawController extends Controller
             ->whereNotIn('id', $usedTeamIds)
             ->orderBy('name')
             ->get()
-            ->map(fn(Team $team) => [
+            ->map(fn (Team $team) => [
                 'id' => $team->id,
                 'name' => $team->name,
             ])
@@ -850,6 +935,7 @@ class TournamentGroupDrawController extends Controller
                 TournamentStatus::DRAFT,
                 TournamentStatus::GROUP_DRAW,
                 TournamentStatus::READY,
+                TournamentStatus::GROUP_STAGE,
             ],
             true,
         );
@@ -873,7 +959,11 @@ class TournamentGroupDrawController extends Controller
     private function syncParticipantRosterStatus(
         Tournament $tournament
     ): void {
-        if (! $this->canManageParticipantRoster($tournament)) {
+        if (! in_array($tournament->status, [
+            TournamentStatus::DRAFT,
+            TournamentStatus::GROUP_DRAW,
+            TournamentStatus::READY,
+        ], true)) {
             return;
         }
 
@@ -961,8 +1051,20 @@ class TournamentGroupDrawController extends Controller
         return null;
     }
 
+    private function canManageWithdrawals($user, Venue $venue): bool
+    {
+        if ($user->global_role?->value === 'superadmin') {
+            return true;
+        }
+
+        return $user->venueUsers()
+            ->where('venue_id', $venue->id)
+            ->where('role', 'admin')
+            ->where('is_active', true)
+            ->exists();
+    }
+
     private function resolveReplacementPlayer(
-        Venue $venue,
         Tournament $tournament,
         TournamentParticipant $participant,
         array $validated
@@ -971,7 +1073,6 @@ class TournamentGroupDrawController extends Controller
 
         if ($existingPlayerId) {
             $player = Player::query()
-                ->where('venue_id', $venue->id)
                 ->where('is_active', true)
                 ->findOrFail($existingPlayerId);
         } else {
@@ -981,26 +1082,12 @@ class TournamentGroupDrawController extends Controller
                 ? trim((string) $validated['nickname'])
                 : null;
 
-            $playerQuery = Player::query()
-                ->where('venue_id', $venue->id)
-                ->where('first_name', $firstName)
-                ->where('last_name', $lastName);
-
-            $nickname === null
-                ? $playerQuery->whereNull('nickname')
-                : $playerQuery->where('nickname', $nickname);
-
-            $player = $playerQuery->first();
-
-            if (! $player) {
-                $player = Player::create([
-                    'venue_id' => $venue->id,
-                    'first_name' => $firstName,
-                    'last_name' => $lastName,
-                    'nickname' => $nickname,
-                    'is_active' => true,
-                ]);
-            }
+            $player = Player::create([
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'nickname' => $nickname,
+                'is_active' => true,
+            ]);
         }
 
         $alreadyUsed = $tournament->participants()
@@ -1063,6 +1150,34 @@ class TournamentGroupDrawController extends Controller
         }
 
         return $team;
+    }
+
+    private function forgetRemovedPlayerParticipant(
+        Tournament $tournament,
+        TournamentParticipant $currentParticipant,
+        Player $replacementPlayer,
+    ): void {
+        $tournament->participants()
+            ->onlyTrashed()
+            ->where('id', '!=', $currentParticipant->id)
+            ->where('participant_type', ParticipantType::PLAYER->value)
+            ->where('player_id', $replacementPlayer->id)
+            ->get()
+            ->each(fn (TournamentParticipant $participant) => $participant->forceDelete());
+    }
+
+    private function forgetRemovedTeamParticipant(
+        Tournament $tournament,
+        TournamentParticipant $currentParticipant,
+        Team $replacementTeam,
+    ): void {
+        $tournament->participants()
+            ->onlyTrashed()
+            ->where('id', '!=', $currentParticipant->id)
+            ->where('participant_type', ParticipantType::TEAM->value)
+            ->where('team_id', $replacementTeam->id)
+            ->get()
+            ->each(fn (TournamentParticipant $participant) => $participant->forceDelete());
     }
 
     private function restoreMatchesVoidedByParticipant(

@@ -15,12 +15,9 @@ const emit = defineEmits<{
     save: [];
 }>();
 
-const winnerButtonClasses = (
-    participantId: number,
-): string => {
+const winnerButtonClasses = (participantId: number): string => {
     const isSelected =
-        props.resultForm.winner_participant_id
-            === String(participantId);
+        props.resultForm.winner_participant_id === String(participantId);
 
     if (isSelected) {
         return 'border-primary bg-primary/10 text-primary';
@@ -45,13 +42,9 @@ const winnerButtonClasses = (
             class="relative w-full max-w-lg rounded-xl border border-sidebar-border/70 bg-background p-5 shadow-xl dark:border-sidebar-border"
         >
             <div>
-                <p class="text-sm text-muted-foreground">
-                    Nerešen rezultat
-                </p>
+                <p class="text-sm text-muted-foreground">Nerešen rezultat</p>
 
-                <h2 class="mt-1 text-xl font-semibold">
-                    Izaberi pobednika
-                </h2>
+                <h2 class="mt-1 text-xl font-semibold">Izaberi pobednika</h2>
 
                 <p class="mt-2 text-sm text-muted-foreground">
                     Rezultat je
@@ -62,7 +55,8 @@ const winnerButtonClasses = (
                         {{ resultForm.score_b }}
                     </span>
 
-                    i razlika će ostati 0. <br> Izabrani učesnik dobija pobedu i 1 bod.
+                    i razlika će ostati 0. <br />
+                    Izabrani učesnik dobija pobedu i 1 bod.
                 </p>
             </div>
 
@@ -71,26 +65,10 @@ const winnerButtonClasses = (
                     v-if="match.participant_a"
                     type="button"
                     class="rounded-xl border p-4 text-left transition"
-                    :class="
-                        winnerButtonClasses(
-                            match.participant_a.id,
-                        )
-                    "
-                    @click="
-                        emit(
-                            'choose-winner',
-                            match.participant_a.id,
-                        )
-                    "
+                    :class="winnerButtonClasses(match.participant_a.id)"
+                    @click="emit('choose-winner', match.participant_a.id)"
                 >
-                    <p class="text-xs text-muted-foreground">
-                        {{
-                            match.participant_a.group_position
-                                ?? '-'
-                        }}
-                    </p>
-
-                    <p class="mt-1 font-medium">
+                    <p class="font-medium">
                         {{ match.participant_a.display_name }}
                     </p>
                 </button>
@@ -99,26 +77,10 @@ const winnerButtonClasses = (
                     v-if="match.participant_b"
                     type="button"
                     class="rounded-xl border p-4 text-left transition"
-                    :class="
-                        winnerButtonClasses(
-                            match.participant_b.id,
-                        )
-                    "
-                    @click="
-                        emit(
-                            'choose-winner',
-                            match.participant_b.id,
-                        )
-                    "
+                    :class="winnerButtonClasses(match.participant_b.id)"
+                    @click="emit('choose-winner', match.participant_b.id)"
                 >
-                    <p class="text-xs text-muted-foreground">
-                        {{
-                            match.participant_b.group_position
-                                ?? '-'
-                        }}
-                    </p>
-
-                    <p class="mt-1 font-medium">
+                    <p class="font-medium">
                         {{ match.participant_b.display_name }}
                     </p>
                 </button>

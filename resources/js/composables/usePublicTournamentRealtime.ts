@@ -1,38 +1,72 @@
 import { router } from '@inertiajs/vue3';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted } from 'vue';
 
-type RealtimeStatus = 'connecting' | 'connected' | 'updated' | 'error';
+type PusherConnection = {
+    bind: (event: string, callback: () => void) => void;
+    unbind: (event: string, callback: () => void) => void;
+    state?: string;
+};
+
+type EchoClient = {
+    channel: (name: string) => {
+        listen: (event: string, callback: () => void) => void;
+    };
+    leave: (name: string) => void;
+    connector?: {
+        pusher?: {
+            connection?: PusherConnection;
+        };
+    };
+};
+
+const FALLBACK_POLLING_INTERVAL_MS = 2_000;
+const SOCKET_BACKUP_POLLING_INTERVAL_MS = 15_000;
 
 type UsePublicTournamentRealtimeOptions = {
     publicCode: string;
     only?: string[];
 };
 
-export function usePublicTournamentRealtime(options: UsePublicTournamentRealtimeOptions) {
-    const realtimeStatus = ref<RealtimeStatus>('connecting');
-    const lastRealtimeUpdateAt = ref<string | null>(null);
+export function usePublicTournamentRealtime(
+    options: UsePublicTournamentRealtimeOptions,
+) {
+    let pollingTimer: number | null = null;
+    let socketConnected = false;
+    let reloadInProgress = false;
+    let queuedReloadSource: 'socket' | 'polling' | null = null;
+    let lastPollingReloadAt = 0;
 
     const channelName = `public-tournament.${options.publicCode}`;
 
-    const formatRealtimeTime = (): string => {
-        return new Date().toLocaleTimeString('sr-RS', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-        });
-    };
+    const reloadPublicTournamentData = (source: 'socket' | 'polling') => {
+        if (reloadInProgress) {
+            queuedReloadSource = source;
 
-    const reloadPublicTournamentData = () => {
-        realtimeStatus.value = 'updated';
-        lastRealtimeUpdateAt.value = formatRealtimeTime();
+            return;
+        }
+
+        reloadInProgress = true;
 
         const reloadOptions: {
             only?: string[];
             preserveScroll: boolean;
             preserveState: boolean;
+            onFinish: () => void;
         } = {
             preserveScroll: true,
             preserveState: true,
+            onFinish: () => {
+                reloadInProgress = false;
+
+                if (queuedReloadSource) {
+                    const nextSource = queuedReloadSource;
+                    queuedReloadSource = null;
+                    window.setTimeout(
+                        () => reloadPublicTournamentData(nextSource),
+                        0,
+                    );
+                }
+            },
         };
 
         if (options.only?.length) {
@@ -42,26 +76,87 @@ export function usePublicTournamentRealtime(options: UsePublicTournamentRealtime
         router.reload(reloadOptions);
     };
 
-    onMounted(() => {
-        const echo = (window as any).Echo;
-
-        if (!echo) {
-            realtimeStatus.value = 'error';
-
+    const refreshFromPolling = () => {
+        if (document.visibilityState !== 'visible') {
             return;
         }
 
-        realtimeStatus.value = 'connected';
+        const now = Date.now();
+        const pollingInterval = socketConnected
+            ? SOCKET_BACKUP_POLLING_INTERVAL_MS
+            : FALLBACK_POLLING_INTERVAL_MS;
 
-        echo
-            .channel(channelName)
-            .listen('.TournamentLiveUpdated', () => {
-                reloadPublicTournamentData();
-            });
+        if (now - lastPollingReloadAt < pollingInterval) {
+            return;
+        }
+
+        lastPollingReloadAt = now;
+        reloadPublicTournamentData('polling');
+    };
+
+    const handleConnected = () => {
+        socketConnected = true;
+    };
+
+    const handleDisconnected = () => {
+        socketConnected = false;
+    };
+
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            refreshFromPolling();
+        }
+    };
+
+    onMounted(() => {
+        const echo = window.Echo as EchoClient | undefined;
+
+        pollingTimer = window.setInterval(
+            refreshFromPolling,
+            FALLBACK_POLLING_INTERVAL_MS,
+        );
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        if (!echo) {
+            return;
+        }
+
+        const connection = echo.connector?.pusher?.connection;
+
+        if (connection) {
+            connection.bind('connected', handleConnected);
+            connection.bind('disconnected', handleDisconnected);
+            connection.bind('unavailable', handleDisconnected);
+            connection.bind('failed', handleDisconnected);
+
+            if (connection.state === 'connected') {
+                handleConnected();
+            }
+        }
+
+        echo.channel(channelName).listen('.TournamentLiveUpdated', () => {
+            socketConnected = true;
+            reloadPublicTournamentData('socket');
+        });
     });
 
     onBeforeUnmount(() => {
-        const echo = (window as any).Echo;
+        const echo = window.Echo as EchoClient | undefined;
+        const connection = echo?.connector?.pusher?.connection;
+
+        if (pollingTimer) {
+            window.clearInterval(pollingTimer);
+        }
+
+        document.removeEventListener(
+            'visibilitychange',
+            handleVisibilityChange,
+        );
+
+        connection?.unbind('connected', handleConnected);
+        connection?.unbind('disconnected', handleDisconnected);
+        connection?.unbind('unavailable', handleDisconnected);
+        connection?.unbind('failed', handleDisconnected);
 
         if (!echo) {
             return;
@@ -69,9 +164,4 @@ export function usePublicTournamentRealtime(options: UsePublicTournamentRealtime
 
         echo.leave(channelName);
     });
-
-    return {
-        realtimeStatus,
-        lastRealtimeUpdateAt,
-    };
 }

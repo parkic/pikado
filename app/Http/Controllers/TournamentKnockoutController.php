@@ -6,15 +6,19 @@ use App\Enums\MatchStage;
 use App\Enums\MatchStatus;
 use App\Enums\RepechageOutcomeStatus;
 use App\Enums\TournamentStatus;
+use App\Events\TournamentLiveUpdated;
 use App\Models\Tournament;
 use App\Models\TournamentMatch;
 use App\Models\TournamentParticipant;
 use App\Models\Venue;
 use App\Services\GroupStandingsCalculator;
 use App\Services\KnockoutBracketGenerator;
+use App\Services\KnockoutDrawService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -24,7 +28,8 @@ class TournamentKnockoutController extends Controller
         Request $request,
         Venue $venue,
         Tournament $tournament,
-        GroupStandingsCalculator $calculator
+        GroupStandingsCalculator $calculator,
+        KnockoutDrawService $drawService,
     ): Response {
         $user = $request->user();
 
@@ -32,6 +37,7 @@ class TournamentKnockoutController extends Controller
         abort_unless($tournament->venue_id === $venue->id, 404);
 
         $groups = collect($calculator->calculate($tournament));
+        $qualificationPositions = $this->qualificationPositions($groups);
 
         $directQualifiers = $this->participantsByStatus($groups, 'direct')
             ->map(fn (array $participant) => array_merge($participant, [
@@ -85,12 +91,92 @@ class TournamentKnockoutController extends Controller
                     $tournament,
                     $knockoutParticipants,
                 ),
+                'repechage_enabled' => (bool) data_get($tournament->settings ?? [], 'repechage_enabled', false),
             ],
             'direct_qualifiers' => $directQualifiers->values(),
             'repechage_qualifiers' => $repechageQualifiers->values(),
             'knockout_participants' => $knockoutParticipants->values(),
-            'knockout_series' => $this->knockoutSeriesGroups($tournament),
+            'knockout_draw' => array_merge($drawService->state($tournament), [
+                'can_manage' => $this->canManageDraw($user, $venue),
+            ]),
+            'knockout_series' => $this->knockoutSeriesGroups(
+                $tournament,
+                $qualificationPositions,
+            ),
         ]);
+    }
+
+    public function updateSeeding(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        KnockoutDrawService $drawService,
+    ): RedirectResponse {
+        $this->authorizeTournament($request, $venue, $tournament);
+        abort_unless($this->canManageDraw($request->user(), $venue), 403);
+
+        $state = $drawService->state($tournament);
+        abort_unless($tournament->status === TournamentStatus::KNOCKOUT_DRAW, 422);
+        abort_unless($state['enabled'] && $state['can_customize_seeding'], 422);
+
+        $participantIds = collect($state['seeded'])
+            ->concat($state['unseeded'])
+            ->pluck('participant_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $validated = $request->validate([
+            'seeded_participant_ids' => ['required', 'array', 'size:'.$state['seeded_count']],
+            'seeded_participant_ids.*' => [
+                'required',
+                'integer',
+                'distinct',
+                Rule::in($participantIds),
+            ],
+        ]);
+
+        $drawService->saveSeeding($tournament, $validated['seeded_participant_ids']);
+        event(new TournamentLiveUpdated($tournament->fresh(), 'knockout_seeding_updated'));
+
+        return back()->with('success', 'Liste nosilaca i nenosilaca su sačuvane.');
+    }
+
+    public function drawNext(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        KnockoutDrawService $drawService,
+    ): RedirectResponse {
+        $this->authorizeTournament($request, $venue, $tournament);
+        abort_unless($this->canManageDraw($request->user(), $venue), 403);
+
+        DB::transaction(function () use ($tournament, $drawService): void {
+            $lockedTournament = Tournament::query()->lockForUpdate()->findOrFail($tournament->id);
+            abort_unless($lockedTournament->status === TournamentStatus::KNOCKOUT_DRAW, 422);
+
+            $state = $drawService->drawNext($lockedTournament);
+            abort_unless($state['enabled'], 422);
+        });
+
+        event(new TournamentLiveUpdated($tournament->fresh(), 'knockout_draw_updated'));
+
+        return back();
+    }
+
+    public function resetDraw(
+        Request $request,
+        Venue $venue,
+        Tournament $tournament,
+        KnockoutDrawService $drawService,
+    ): RedirectResponse {
+        $this->authorizeTournament($request, $venue, $tournament);
+        abort_unless($this->canManageDraw($request->user(), $venue), 403);
+        abort_unless($tournament->status === TournamentStatus::KNOCKOUT_DRAW, 422);
+
+        $drawService->reset($tournament);
+        event(new TournamentLiveUpdated($tournament->fresh(), 'knockout_draw_reset'));
+
+        return back()->with('success', 'Izvlačenje je vraćeno na početak.');
     }
 
     public function generate(
@@ -102,6 +188,7 @@ class TournamentKnockoutController extends Controller
         $user = $request->user();
 
         abort_unless($user->canAccessVenue($venue), 403);
+        abort_unless($this->canManageDraw($user, $venue), 403);
         abort_unless($tournament->venue_id === $venue->id, 404);
 
         $groups = collect(app(GroupStandingsCalculator::class)->calculate($tournament));
@@ -137,7 +224,7 @@ class TournamentKnockoutController extends Controller
 
         return redirect()
             ->route('venues.tournaments.schedule.index', [$venue, $tournament])
-            ->with('success', 'Generisano nokaut mečeva: ' . $createdMatches . '.');
+            ->with('success', 'Generisano nokaut mečeva: '.$createdMatches.'.');
     }
 
     private function participantsByStatus(Collection $groups, string $status): Collection
@@ -149,7 +236,7 @@ class TournamentKnockoutController extends Controller
                     ->map(fn (array $row) => [
                         'participant_id' => $row['participant_id'],
                         'group_name' => $group['name'],
-                        'group_position' => $row['group_position'],
+                        'qualification_position' => $row['qualification_position'],
                         'group_rank' => $row['position'],
                         'display_name' => $row['display_name'],
                         'played' => $row['played'],
@@ -182,6 +269,14 @@ class TournamentKnockoutController extends Controller
             return false;
         }
 
+        if ((bool) data_get($tournament->settings ?? [], 'repechage_enabled', false)) {
+            $drawState = app(KnockoutDrawService::class)->state($tournament);
+
+            if ($drawState['enabled'] && ! $drawState['complete']) {
+                return false;
+            }
+        }
+
         return ! $tournament->matches()
             ->whereIn('stage', [
                 MatchStage::KNOCKOUT->value,
@@ -191,8 +286,29 @@ class TournamentKnockoutController extends Controller
             ->exists();
     }
 
-    private function knockoutSeriesGroups(Tournament $tournament): Collection
+    private function authorizeTournament(Request $request, Venue $venue, Tournament $tournament): void
     {
+        abort_unless($request->user()->canAccessVenue($venue), 403);
+        abort_unless($tournament->venue_id === $venue->id, 404);
+    }
+
+    private function canManageDraw($user, Venue $venue): bool
+    {
+        if ($user->global_role?->value === 'superadmin') {
+            return true;
+        }
+
+        return $user->venueUsers()
+            ->where('venue_id', $venue->id)
+            ->where('role', 'admin')
+            ->where('is_active', true)
+            ->exists();
+    }
+
+    private function knockoutSeriesGroups(
+        Tournament $tournament,
+        Collection $qualificationPositions,
+    ): Collection {
         $matches = TournamentMatch::query()
             ->with([
                 'participantA.player',
@@ -219,8 +335,11 @@ class TournamentKnockoutController extends Controller
         }
 
         $series = $matches
-            ->groupBy(fn (TournamentMatch $match) => $match->bracket_round . '-' . $match->bracket_position)
-            ->map(fn (Collection $seriesMatches) => $this->knockoutSeriesSummary($seriesMatches))
+            ->groupBy(fn (TournamentMatch $match) => $match->bracket_round.'-'.$match->bracket_position)
+            ->map(fn (Collection $seriesMatches) => $this->knockoutSeriesSummary(
+                $seriesMatches,
+                $qualificationPositions,
+            ))
             ->sortBy(fn (array $series) => sprintf('%02d-%03d', $series['round_sort'], $series['position']))
             ->values();
 
@@ -240,8 +359,10 @@ class TournamentKnockoutController extends Controller
             ->values();
     }
 
-    private function knockoutSeriesSummary(Collection $seriesMatches): array
-    {
+    private function knockoutSeriesSummary(
+        Collection $seriesMatches,
+        Collection $qualificationPositions,
+    ): array {
         $seriesMatches = $seriesMatches
             ->sortBy('round_robin_leg')
             ->values();
@@ -302,16 +423,17 @@ class TournamentKnockoutController extends Controller
             'round_label' => $this->bracketRoundLabel($firstMatch->bracket_round),
             'round_sort' => $this->bracketRoundSort($firstMatch->bracket_round),
             'position' => (int) $firstMatch->bracket_position,
-            'title' => $this->bracketRoundLabel($firstMatch->bracket_round) . ' #' . $firstMatch->bracket_position,
+            'title' => $this->bracketRoundLabel($firstMatch->bracket_round).' #'.$firstMatch->bracket_position,
             'wins_required' => $winsRequired,
-            'max_legs' => $seriesMatches->count(),
-            'participant_a' => $this->participantSummary($participantA),
-            'participant_b' => $this->participantSummary($participantB),
+            'max_legs' => ($winsRequired * 2) - 1,
+            'participant_a' => $this->participantSummary($participantA, $qualificationPositions),
+            'participant_b' => $this->participantSummary($participantB, $qualificationPositions),
             'participant_a_wins' => $participantAWins,
             'participant_b_wins' => $participantBWins,
-            'series_score' => $participantAWins . ' : ' . $participantBWins,
+            'series_score' => $participantAWins.' : '.$participantBWins,
             'winner' => $this->participantSummary(
-                $this->participantFromSeries($seriesMatches, $seriesWinnerId)
+                $this->participantFromSeries($seriesMatches, $seriesWinnerId),
+                $qualificationPositions,
             ),
             'status' => $seriesStatus,
             'status_label' => $seriesStatusLabel,
@@ -322,9 +444,9 @@ class TournamentKnockoutController extends Controller
                     'status' => $match->status->value,
                     'status_label' => $this->matchStatusLabel($match->status),
                     'score' => $match->score_a !== null && $match->score_b !== null
-                        ? $match->score_a . ' : ' . $match->score_b
+                        ? $match->score_a.' : '.$match->score_b
                         : null,
-                    'winner' => $this->participantSummary($match->winner),
+                    'winner' => $this->participantSummary($match->winner, $qualificationPositions),
                     'resource_name' => $match->resource?->name,
                 ])
                 ->values(),
@@ -375,8 +497,10 @@ class TournamentKnockoutController extends Controller
         return null;
     }
 
-    private function participantSummary(?TournamentParticipant $participant): ?array
-    {
+    private function participantSummary(
+        ?TournamentParticipant $participant,
+        Collection $qualificationPositions,
+    ): ?array {
         if (! $participant) {
             return null;
         }
@@ -384,10 +508,20 @@ class TournamentKnockoutController extends Controller
         return [
             'id' => $participant->id,
             'display_name' => $this->participantDisplayName($participant),
-            'group_position' => $participant->group_position,
+            'qualification_position' => $qualificationPositions->get($participant->id),
             'status' => $participant->status->value,
             'is_withdrawn' => $participant->status->value === 'withdrawn',
         ];
+    }
+
+    private function qualificationPositions(Collection $groups): Collection
+    {
+        return $groups
+            ->flatMap(fn (array $group) => collect($group['rows']))
+            ->filter(fn (array $row) => $row['qualification_position'] !== null)
+            ->mapWithKeys(fn (array $row) => [
+                $row['participant_id'] => $row['qualification_position'],
+            ]);
     }
 
     private function participantDisplayName(TournamentParticipant $participant): string
@@ -397,21 +531,22 @@ class TournamentKnockoutController extends Controller
         }
 
         if ($participant->player) {
-            $name = trim($participant->player->first_name . ' ' . $participant->player->last_name);
+            $name = trim($participant->player->first_name.' '.$participant->player->last_name);
 
             if ($participant->player->nickname) {
-                $name .= ' (' . $participant->player->nickname . ')';
+                $name .= ' ('.$participant->player->nickname.')';
             }
 
             return $name;
         }
 
-        return 'Učesnik #' . $participant->id;
+        return 'Učesnik #'.$participant->id;
     }
 
     private function bracketRoundLabel(?string $bracketRound): string
     {
         return match ($bracketRound) {
+            'preliminary' => 'Preliminarna runda',
             'round_of_32' => '1/16 finala',
             'round_of_16' => '1/8 finala',
             'quarter_final' => 'Četvrtfinale',
@@ -425,6 +560,7 @@ class TournamentKnockoutController extends Controller
     private function bracketRoundSort(?string $bracketRound): int
     {
         return match ($bracketRound) {
+            'preliminary' => 5,
             'round_of_32' => 10,
             'round_of_16' => 20,
             'quarter_final' => 30,
@@ -440,6 +576,7 @@ class TournamentKnockoutController extends Controller
         return match ($status) {
             MatchStatus::SCHEDULED => 'Zakazano',
             MatchStatus::IN_PROGRESS => 'U toku',
+            MatchStatus::POSTPONED => 'Privremeno preskočen',
             MatchStatus::FINISHED => 'Završeno',
             MatchStatus::VOIDED => 'Anulirano',
             MatchStatus::CANCELLED => 'Otkazano',

@@ -53,6 +53,7 @@ class GroupStandingsCalculator
                 'participant_status' => $participant->status->value,
                 'is_withdrawn' => $isWithdrawn,
                 'withdrawn_at' => $participant->withdrawn_at?->format('d.m.Y. H:i'),
+                'withdrawal_policy' => $participant->withdrawal_policy?->value,
                 'played' => 0,
                 'wins' => 0,
                 'losses' => 0,
@@ -87,13 +88,6 @@ class GroupStandingsCalculator
             }
 
             if (! isset($rows[$match->participant_a_id], $rows[$match->participant_b_id])) {
-                continue;
-            }
-
-            if (
-                $rows[$match->participant_a_id]['is_withdrawn']
-                || $rows[$match->participant_b_id]['is_withdrawn']
-            ) {
                 continue;
             }
 
@@ -142,8 +136,9 @@ class GroupStandingsCalculator
                 ['display_name', 'asc'],
             ])
             ->values()
-            ->map(function (array $row, int $index) {
+            ->map(function (array $row, int $index) use ($group) {
                 $row['position'] = $index + 1;
+                $row['qualification_position'] = $group->name.($index + 1);
                 $row['qualification_status'] = 'eliminated';
                 $row['qualification_label'] = 'Ispao';
 
@@ -159,6 +154,7 @@ class GroupStandingsCalculator
             ->values()
             ->map(function (array $row) {
                 $row['position'] = null;
+                $row['qualification_position'] = null;
                 $row['qualification_status'] = 'withdrawn';
                 $row['qualification_label'] = 'Odustao';
                 $row['qualification_is_manual'] = false;
@@ -179,7 +175,7 @@ class GroupStandingsCalculator
     }
 
     /**
-     * @param Collection<int, array<string, mixed>> $groups
+     * @param  Collection<int, array<string, mixed>>  $groups
      * @return Collection<int, array<string, mixed>>
      */
     private function applyQualificationStatuses(Collection $groups, Tournament $tournament): Collection
@@ -208,11 +204,33 @@ class GroupStandingsCalculator
             $repechageEnabled,
             $repechagePerGroup
         ) {
-            $group['rows'] = collect($group['rows'])
+            $isGroupComplete = $group['matches_count'] > 0
+                && $group['finished_matches_count'] >= $group['matches_count'];
+
+            $rows = collect($group['rows']);
+            $activeRows = $rows->reject(fn (array $row) => $row['is_withdrawn']);
+            $manualDirectQualifiersCount = $activeRows
+                ->where('qualification_override_status', 'direct')
+                ->count();
+            $manualRepechageQualifiersCount = $activeRows
+                ->where('qualification_override_status', 'repechage')
+                ->count();
+
+            $remainingDirectSlots = max(
+                0,
+                $directQualifiersPerGroup - $manualDirectQualifiersCount,
+            );
+            $remainingRepechageSlots = max(
+                0,
+                $repechagePerGroup - $manualRepechageQualifiersCount,
+            );
+
+            $group['rows'] = $rows
                 ->map(function (array $row) use (
-                    $directQualifiersPerGroup,
                     $repechageEnabled,
-                    $repechagePerGroup
+                    $isGroupComplete,
+                    &$remainingDirectSlots,
+                    &$remainingRepechageSlots,
                 ) {
                     $row['qualification_is_manual'] = false;
 
@@ -220,13 +238,6 @@ class GroupStandingsCalculator
                         $row['qualification_status'] = 'withdrawn';
                         $row['qualification_label'] = 'Odustao';
                         $row['qualification_override_status'] = null;
-
-                        return $row;
-                    }
-
-                    if ($directQualifiersPerGroup > 0 && $row['position'] <= $directQualifiersPerGroup) {
-                        $row['qualification_status'] = 'direct';
-                        $row['qualification_label'] = 'Direktan prolaz';
 
                         return $row;
                     }
@@ -239,17 +250,16 @@ class GroupStandingsCalculator
                         return $row;
                     }
 
-                    $row['qualification_is_manual'] = false;
+                    if ($remainingDirectSlots > 0) {
+                        $remainingDirectSlots--;
+                        $row['qualification_status'] = 'direct';
+                        $row['qualification_label'] = 'Direktan prolaz';
 
-                    $firstRepechagePosition = $directQualifiersPerGroup + 1;
-                    $lastRepechagePosition = $directQualifiersPerGroup + $repechagePerGroup;
+                        return $row;
+                    }
 
-                    if (
-                        $repechageEnabled
-                        && $repechagePerGroup > 0
-                        && $row['position'] >= $firstRepechagePosition
-                        && $row['position'] <= $lastRepechagePosition
-                    ) {
+                    if ($repechageEnabled && $remainingRepechageSlots > 0) {
+                        $remainingRepechageSlots--;
                         $row['qualification_status'] = 'repechage';
                         $row['qualification_label'] = 'Repasaž';
 
@@ -257,7 +267,9 @@ class GroupStandingsCalculator
                     }
 
                     $row['qualification_status'] = 'eliminated';
-                    $row['qualification_label'] = 'Ispao';
+                    $row['qualification_label'] = $isGroupComplete
+                        ? 'Ispao'
+                        : 'Ispada';
 
                     return $row;
                 })
@@ -271,10 +283,10 @@ class GroupStandingsCalculator
     private function participantDisplayName(TournamentParticipant $participant): string
     {
         if ($participant->player) {
-            $name = trim($participant->player->first_name . ' ' . $participant->player->last_name);
+            $name = trim($participant->player->first_name.' '.$participant->player->last_name);
 
             if ($participant->player->nickname) {
-                return $name . ' (' . $participant->player->nickname . ')';
+                return $name.' ('.$participant->player->nickname.')';
             }
 
             return $name;

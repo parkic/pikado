@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
+import { confirmAction } from '@/composables/useConfirmDialog';
 
 type Venue = {
     id: number;
@@ -19,8 +20,15 @@ const props = defineProps<{
     teams: Team[];
 }>();
 
-const deleteTeam = (team: Team) => {
-    if (!confirm(`Da li sigurno želiš da obrišeš tim "${team.name}"?`)) {
+const deleteTeam = async (team: Team) => {
+    if (
+        !(await confirmAction({
+            title: 'Obriši tim?',
+            description: `${team.name} će biti uklonjen iz baze timova ovog lokala.`,
+            confirmLabel: 'Obriši tim',
+            variant: 'destructive',
+        }))
+    ) {
         return;
     }
 
@@ -43,7 +51,9 @@ defineOptions({
     <Head :title="`${venue.name} Teams`" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div
+            class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+        >
             <div>
                 <p class="text-sm text-muted-foreground">
                     {{ venue.name }}
@@ -54,7 +64,8 @@ defineOptions({
                 </h1>
 
                 <p class="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Lista timova za ovaj lokal. Kasnije će se timovi birati za ekipne turnire.
+                    Lista timova za ovaj lokal. Kasnije će se timovi birati za
+                    ekipne turnire.
                 </p>
             </div>
 
@@ -75,18 +86,24 @@ defineOptions({
             </div>
         </div>
 
-        <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
+        <div
+            class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+        >
             <div
                 v-if="teams.length"
                 class="overflow-hidden rounded-lg border border-sidebar-border/70 dark:border-sidebar-border"
             >
                 <table class="w-full text-left text-sm">
-                    <thead class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border">
+                    <thead
+                        class="border-b border-sidebar-border/70 bg-muted/40 dark:border-sidebar-border"
+                    >
                         <tr>
                             <th class="px-4 py-3 font-medium">Naziv</th>
                             <th class="px-4 py-3 font-medium">Napomena</th>
                             <th class="px-4 py-3 font-medium">Status</th>
-                            <th class="px-4 py-3 text-right font-medium">Akcije</th>
+                            <th class="px-4 py-3 text-right font-medium">
+                                Akcije
+                            </th>
                         </tr>
                     </thead>
 

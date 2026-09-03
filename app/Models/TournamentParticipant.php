@@ -6,6 +6,7 @@ use App\Enums\ParticipantStatus;
 use App\Enums\ParticipantType;
 use App\Enums\QualificationStatus;
 use App\Enums\RepechageOutcomeStatus;
+use App\Enums\WithdrawalPolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +30,7 @@ class TournamentParticipant extends Model
         'withdrawn_at',
         'withdrawn_stage',
         'withdrawn_reason',
+        'withdrawal_policy',
         'repechage_outcome_status',
     ];
 
@@ -38,6 +40,7 @@ class TournamentParticipant extends Model
         'qualification_override_status' => QualificationStatus::class,
         'repechage_outcome_status' => RepechageOutcomeStatus::class,
         'withdrawn_at' => 'datetime',
+        'withdrawal_policy' => WithdrawalPolicy::class,
     ];
 
     public function tournament(): BelongsTo

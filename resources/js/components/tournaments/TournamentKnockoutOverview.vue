@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 
-import type {
-    TournamentKnockoutData,
-} from '@/types/tournament';
+import type { TournamentKnockoutData } from '@/types/tournament';
 
 defineProps<{
     tournament: TournamentKnockoutData;
@@ -21,9 +19,7 @@ const emit = defineEmits<{
             <div
                 class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
             >
-                <p class="text-sm text-muted-foreground">
-                    Veličina nokauta
-                </p>
+                <p class="text-sm text-muted-foreground">Veličina nokauta</p>
 
                 <p class="mt-2 text-2xl font-semibold">
                     {{ tournament.knockout_size ?? '-' }}
@@ -33,9 +29,7 @@ const emit = defineEmits<{
             <div
                 class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
             >
-                <p class="text-sm text-muted-foreground">
-                    Učesnika za nokaut
-                </p>
+                <p class="text-sm text-muted-foreground">Učesnika za nokaut</p>
 
                 <p class="mt-2 text-2xl font-semibold">
                     {{ tournament.knockout_participants_count }}
@@ -45,9 +39,7 @@ const emit = defineEmits<{
             <div
                 class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
             >
-                <p class="text-sm">
-                    Direktno
-                </p>
+                <p class="text-sm">Direktno</p>
 
                 <p class="mt-2 text-2xl font-semibold">
                     {{ tournament.direct_qualifiers_count }}
@@ -57,9 +49,7 @@ const emit = defineEmits<{
             <div
                 class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
             >
-                <p class="text-sm">
-                    Iz repasaža
-                </p>
+                <p class="text-sm">Iz repasaža</p>
 
                 <p class="mt-2 text-2xl font-semibold">
                     {{ tournament.repechage_qualifiers_count }}
@@ -71,14 +61,11 @@ const emit = defineEmits<{
             v-if="tournament.is_knockout_ready"
             class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
         >
-            <h2 class="text-lg font-medium">
-                Nokaut je spreman
-            </h2>
+            <h2 class="text-lg font-medium">Nokaut je spreman</h2>
 
             <p class="mt-1 text-sm">
-                Broj učesnika se poklapa sa veličinom
-                nokauta. Sledeći korak je generisanje nokaut
-                kostura.
+                Broj učesnika se poklapa sa veličinom nokauta. Sledeći korak je
+                generisanje nokaut kostura.
             </p>
 
             <button
@@ -103,13 +90,12 @@ const emit = defineEmits<{
             v-else
             class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
         >
-            <h2 class="text-lg font-medium">
-                Nokaut još nije spreman
-            </h2>
+            <h2 class="text-lg font-medium">Nokaut još nije spreman</h2>
 
             <p class="mt-1 text-sm">
-                Potrebno je da broj učesnika za nokaut bude tačno {{ tournament.knockout_size ?? '-' }}. <br />
-                Trenutno ih ima  {{ tournament.knockout_participants_count }}.
+                Potrebno je da broj učesnika za nokaut bude tačno
+                {{ tournament.knockout_size ?? '-' }}. <br />
+                Trenutno ih ima {{ tournament.knockout_participants_count }}.
             </p>
         </div>
     </div>

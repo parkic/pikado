@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
-type Venue = {
-    id: number;
-    name: string;
-    slug: string;
-};
-
 type Player = {
     id: number;
     first_name: string;
@@ -17,7 +11,6 @@ type Player = {
 };
 
 const props = defineProps<{
-    venue: Venue;
     player: Player;
 }>();
 
@@ -30,7 +23,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.put(`/venues/${props.venue.slug}/players/${props.player.id}`);
+    form.put(`/admin/players/${props.player.id}`);
 };
 
 defineOptions({
@@ -46,26 +39,27 @@ defineOptions({
 </script>
 
 <template>
-    <Head :title="`Izmeni igrača - ${venue.name}`" />
+    <Head title="Izmeni igrača" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div
+            class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+        >
             <div>
-                <p class="text-sm text-muted-foreground">
-                    {{ venue.name }}
-                </p>
+                <p class="text-sm font-medium text-primary">Aplikacija</p>
 
                 <h1 class="mt-1 text-2xl font-semibold tracking-tight">
                     Izmeni igrača
                 </h1>
 
                 <p class="mt-2 max-w-2xl text-sm text-muted-foreground">
-                    Izmeni osnovne podatke igrača za ovaj lokal.
+                    Izmena važi na globalnom profilu i prikazuje se na svim
+                    turnirima na kojima je igrač učestvovao.
                 </p>
             </div>
 
             <Link
-                :href="`/venues/${venue.slug}/players`"
+                href="/admin/players"
                 class="inline-flex items-center justify-center rounded-md border border-sidebar-border/70 px-4 py-2 text-sm font-medium hover:bg-muted dark:border-sidebar-border"
             >
                 Nazad na igrače
@@ -78,10 +72,7 @@ defineOptions({
         >
             <div class="space-y-5">
                 <div>
-                    <label
-                        for="first_name"
-                        class="text-sm font-medium"
-                    >
+                    <label for="first_name" class="text-sm font-medium">
                         Ime
                     </label>
 
@@ -90,7 +81,7 @@ defineOptions({
                         v-model="form.first_name"
                         type="text"
                         class="mt-2 w-full rounded-md border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring dark:border-sidebar-border"
-                    >
+                    />
 
                     <p
                         v-if="form.errors.first_name"
@@ -101,10 +92,7 @@ defineOptions({
                 </div>
 
                 <div>
-                    <label
-                        for="last_name"
-                        class="text-sm font-medium"
-                    >
+                    <label for="last_name" class="text-sm font-medium">
                         Prezime
                     </label>
 
@@ -113,7 +101,7 @@ defineOptions({
                         v-model="form.last_name"
                         type="text"
                         class="mt-2 w-full rounded-md border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring dark:border-sidebar-border"
-                    >
+                    />
 
                     <p
                         v-if="form.errors.last_name"
@@ -124,10 +112,7 @@ defineOptions({
                 </div>
 
                 <div>
-                    <label
-                        for="nickname"
-                        class="text-sm font-medium"
-                    >
+                    <label for="nickname" class="text-sm font-medium">
                         Nadimak
                     </label>
 
@@ -136,7 +121,7 @@ defineOptions({
                         v-model="form.nickname"
                         type="text"
                         class="mt-2 w-full rounded-md border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring dark:border-sidebar-border"
-                    >
+                    />
 
                     <p
                         v-if="form.errors.nickname"
@@ -147,10 +132,7 @@ defineOptions({
                 </div>
 
                 <div>
-                    <label
-                        for="notes"
-                        class="text-sm font-medium"
-                    >
+                    <label for="notes" class="text-sm font-medium">
                         Napomena
                     </label>
 
@@ -174,17 +156,12 @@ defineOptions({
                         v-model="form.is_active"
                         type="checkbox"
                         class="rounded border-sidebar-border/70"
-                    >
+                    />
 
-                    <span class="text-sm font-medium">
-                        Aktivan igrač
-                    </span>
+                    <span class="text-sm font-medium"> Aktivan igrač </span>
                 </label>
 
-                <p
-                    v-if="form.errors.is_active"
-                    class="text-sm text-red-500"
-                >
+                <p v-if="form.errors.is_active" class="text-sm text-red-500">
                     {{ form.errors.is_active }}
                 </p>
             </div>
@@ -199,7 +176,7 @@ defineOptions({
                 </button>
 
                 <Link
-                    :href="`/venues/${venue.slug}/players`"
+                    href="/admin/players"
                     class="inline-flex items-center justify-center rounded-md border border-sidebar-border/70 px-4 py-2 text-sm font-medium hover:bg-muted dark:border-sidebar-border"
                 >
                     Otkaži

@@ -2,6 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 
 import PageHeader from '@/components/shared/PageHeader.vue';
+import TournamentAdminNav from '@/components/tournaments/TournamentAdminNav.vue';
 import TournamentStandingsGroupCard from '@/components/tournaments/TournamentStandingsGroupCard.vue';
 
 import { useTournamentStandingsActions } from '@/composables/useTournamentStandingsActions';
@@ -31,24 +32,14 @@ defineOptions({
     },
 });
 
-const routes = tournamentRoutes(
-    props.venue.slug,
-    props.tournament.slug,
-);
+const routes = tournamentRoutes(props.venue.slug, props.tournament.slug);
 
-const {
-    updateQualificationOverride,
-    withdrawParticipant,
-    restoreParticipant,
-} = useTournamentStandingsActions({
-    qualificationOverrideUrl:
-        routes.standingQualificationOverride,
-    participantWithdrawUrl:
-        routes.standingParticipantWithdraw,
-    participantRestoreUrl:
-        routes.standingParticipantRestore,
-});
-
+const { updateQualificationOverride, withdrawParticipant, restoreParticipant } =
+    useTournamentStandingsActions({
+        qualificationOverrideUrl: routes.standingQualificationOverride,
+        participantWithdrawUrl: routes.standingParticipantWithdraw,
+        participantRestoreUrl: routes.standingParticipantRestore,
+    });
 </script>
 
 <template>
@@ -67,45 +58,24 @@ const {
                 >
                     Podešavanje prolaza
                 </Link>
-
-                <Link
-                    :href="routes.repechage"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Repasaž
-                </Link>
-
-                <Link
-                    :href="routes.schedule"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Raspored
-                </Link>
-
-                <Link
-                    :href="routes.show"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Nazad na turnir
-                </Link>
             </template>
         </PageHeader>
 
-        <div
-            v-if="groups.length"
-            class="grid gap-6 xl:grid-cols-2"
-        >
+        <TournamentAdminNav
+            active="standings"
+            :routes="routes"
+            :status="tournament.status"
+            :repechage-enabled="tournament.repechage_enabled"
+        />
+
+        <div v-if="groups.length" class="grid gap-6 xl:grid-cols-2">
             <TournamentStandingsGroupCard
                 v-for="group in groups"
                 :key="group.id"
                 :group="group"
-                :can-manage-withdrawals="
-                    tournament.can_manage_withdrawals
-                "
+                :can-manage-withdrawals="tournament.can_manage_withdrawals"
                 :tournament-status="tournament.status"
-                @update-qualification-override="
-                    updateQualificationOverride
-                "
+                @update-qualification-override="updateQualificationOverride"
                 @withdraw-participant="withdrawParticipant"
                 @restore-participant="restoreParticipant"
             />

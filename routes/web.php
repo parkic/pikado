@@ -1,19 +1,21 @@
 <?php
 
-use Inertia\Inertia;
-use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\VenueDashboardController;
-use App\Http\Controllers\VenueResourceController;
 use App\Http\Controllers\PlayerController;
+use App\Http\Controllers\PublicPlayerController;
+use App\Http\Controllers\PublicTournamentController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TournamentController;
 use App\Http\Controllers\TournamentGroupDrawController;
+use App\Http\Controllers\TournamentKnockoutController;
+use App\Http\Controllers\TournamentRepechageController;
 use App\Http\Controllers\TournamentScheduleController;
 use App\Http\Controllers\TournamentStandingsController;
-use App\Http\Controllers\TournamentRepechageController;
-use App\Http\Controllers\TournamentKnockoutController;
-use App\Http\Controllers\PublicTournamentController;
+use App\Http\Controllers\VenueDashboardController;
+use App\Http\Controllers\VenueResourceController;
+use App\Http\Controllers\VenueSettingsController;
+use App\Models\Player;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -25,6 +27,10 @@ Route::get('/t/{publicCode}/schedule', [PublicTournamentController::class, 'sche
     ->name('public.tournaments.schedule');
 Route::get('/t/{publicCode}/knockout', [PublicTournamentController::class, 'knockout'])
     ->name('public.tournaments.knockout');
+Route::get('/players/{player}', [PublicPlayerController::class, 'show'])
+    ->name('public.players.show');
+Route::get('/v/{venue:slug}/players/{player}', [PublicPlayerController::class, 'legacy'])
+    ->name('public.players.legacy');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
@@ -61,7 +67,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     Route::get('venues/{venue:slug}/dashboard', VenueDashboardController::class)
-    ->name('venues.dashboard');
+        ->name('venues.dashboard');
+
+    Route::get('venues/{venue:slug}/settings', [VenueSettingsController::class, 'edit'])
+        ->name('venues.settings.edit');
+    Route::put('venues/{venue:slug}/settings', [VenueSettingsController::class, 'update'])
+        ->name('venues.settings.update');
 
     // Venue Resources
     Route::get('venues/{venue:slug}/resources', [VenueResourceController::class, 'index'])
@@ -77,21 +88,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('venues/{venue:slug}/resources/{resource}', [VenueResourceController::class, 'destroy'])
         ->name('venues.resources.destroy');
 
+    // Global player directory. Players belong to the app, not to a venue.
+    Route::get('admin/players', [PlayerController::class, 'index'])->name('players.index');
+    Route::get('admin/players/create', [PlayerController::class, 'create'])->name('players.create');
+    Route::post('admin/players', [PlayerController::class, 'store'])->name('players.store');
+    Route::get('admin/players/{player}/edit', [PlayerController::class, 'edit'])->name('players.edit');
+    Route::put('admin/players/{player}', [PlayerController::class, 'update'])->name('players.update');
+    Route::delete('admin/players/{player}', [PlayerController::class, 'destroy'])->name('players.destroy');
 
-    // Players
-    Route::get('venues/{venue:slug}/players', [PlayerController::class, 'index'])
+    // Preserve old bookmarks while keeping the canonical administration outside venues.
+    Route::get('venues/{venue:slug}/players', fn () => redirect()->route('players.index'))
         ->name('venues.players.index');
-    Route::get('venues/{venue:slug}/players/create', [PlayerController::class, 'create'])
+    Route::get('venues/{venue:slug}/players/create', fn () => redirect()->route('players.create'))
         ->name('venues.players.create');
-    Route::post('venues/{venue:slug}/players', [PlayerController::class, 'store'])
-        ->name('venues.players.store');
-    Route::get('venues/{venue:slug}/players/{player}/edit', [PlayerController::class, 'edit'])
+    Route::get('venues/{venue:slug}/players/{player}/edit', fn ($venue, Player $player) => redirect()->route('players.edit', $player))
         ->name('venues.players.edit');
-    Route::put('venues/{venue:slug}/players/{player}', [PlayerController::class, 'update'])
-        ->name('venues.players.update');
-    Route::delete('venues/{venue:slug}/players/{player}', [PlayerController::class, 'destroy'])
-        ->name('venues.players.destroy');
-
 
     // Teams
     Route::get('venues/{venue:slug}/teams', [TeamController::class, 'index'])
@@ -107,7 +118,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('venues/{venue:slug}/teams/{team}', [TeamController::class, 'destroy'])
         ->name('venues.teams.destroy');
 
-
     // Tournaments
     Route::get('venues/{venue:slug}/tournaments', [TournamentController::class, 'index'])
         ->name('venues.tournaments.index');
@@ -115,6 +125,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('venues.tournaments.create');
     Route::post('venues/{venue:slug}/tournaments', [TournamentController::class, 'store'])
         ->name('venues.tournaments.store');
+    Route::delete('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('venues.tournaments.destroy');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/groups/setup', [TournamentController::class, 'setupGroups'])
         ->scopeBindings()
         ->name('venues.tournaments.groups.setup');
@@ -167,6 +180,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/schedule/matches/{match}/result', [TournamentScheduleController::class, 'updateResult'])
         ->scopeBindings()
         ->name('venues.tournaments.schedule.matches.result');
+    Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/schedule/matches/{match}/postponement', [TournamentScheduleController::class, 'updatePostponement'])
+        ->scopeBindings()
+        ->name('venues.tournaments.schedule.matches.postponement');
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}/standings', [TournamentStandingsController::class, 'index'])
         ->scopeBindings()
         ->name('venues.tournaments.standings.index');
@@ -207,12 +223,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/knockout/generate', [TournamentKnockoutController::class, 'generate'])
         ->scopeBindings()
         ->name('venues.tournaments.knockout.generate');
+    Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/knockout/seeding', [TournamentKnockoutController::class, 'updateSeeding'])
+        ->scopeBindings()
+        ->name('venues.tournaments.knockout.seeding.update');
+    Route::post('venues/{venue:slug}/tournaments/{tournament:slug}/knockout/draw/next', [TournamentKnockoutController::class, 'drawNext'])
+        ->scopeBindings()
+        ->name('venues.tournaments.knockout.draw.next');
+    Route::delete('venues/{venue:slug}/tournaments/{tournament:slug}/knockout/draw', [TournamentKnockoutController::class, 'resetDraw'])
+        ->scopeBindings()
+        ->name('venues.tournaments.knockout.draw.reset');
 
     Route::patch('venues/{venue:slug}/tournaments/{tournament:slug}/knockout/matches/{match}/participants/{participant}/walkover', [TournamentScheduleController::class, 'applyKnockoutWalkover'])
         ->withoutScopedBindings()
         ->name('venues.tournaments.knockout.matches.participants.walkover');
 
     Route::get('venues/{venue:slug}/tournaments/{tournament:slug}', [TournamentController::class, 'show'])
+        ->scopeBindings()
         ->name('venues.tournaments.show');
 
 });

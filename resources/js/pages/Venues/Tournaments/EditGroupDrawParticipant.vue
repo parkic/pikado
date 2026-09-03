@@ -18,10 +18,7 @@ const props = defineProps<{
     participant: TournamentEditGroupDrawParticipant;
 }>();
 
-const routes = tournamentRoutes(
-    props.venue.slug,
-    props.tournament.slug,
-);
+const routes = tournamentRoutes(props.venue.slug, props.tournament.slug);
 
 defineOptions({
     layout: {
@@ -34,24 +31,15 @@ defineOptions({
     },
 });
 
-const form =
-    useForm<TournamentEditGroupDrawParticipantFormData>({
-        first_name:
-            props.participant.player?.first_name ?? '',
-        last_name:
-            props.participant.player?.last_name ?? '',
-        nickname:
-            props.participant.player?.nickname ?? '',
-        team_name:
-            props.participant.team?.name ?? '',
-    });
+const form = useForm<TournamentEditGroupDrawParticipantFormData>({
+    first_name: props.participant.player?.first_name ?? '',
+    last_name: props.participant.player?.last_name ?? '',
+    nickname: props.participant.player?.nickname ?? '',
+    team_name: props.participant.team?.name ?? '',
+});
 
 const submit = () => {
-    form.put(
-        routes.groupDrawParticipant(
-            props.participant.id,
-        ),
-    );
+    form.put(routes.groupDrawParticipant(props.participant.id));
 };
 </script>
 
@@ -69,7 +57,7 @@ const submit = () => {
                     :href="routes.groupDraw"
                     class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
                 >
-                    Nazad na Group Draw
+                    Nazad na učesnike
                 </Link>
             </template>
         </PageHeader>
@@ -78,13 +66,14 @@ const submit = () => {
             class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]"
             @submit.prevent="submit"
         >
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-                <h2 class="text-lg font-medium">
-                    Podaci učesnika
-                </h2>
+            <div
+                class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+            >
+                <h2 class="text-lg font-medium">Podaci učesnika</h2>
 
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Promena se čuva na player/team profilu i prikazuje se svuda u ovom turniru.
+                    Promena se čuva na player/team profilu i prikazuje se svuda
+                    u ovom turniru.
                 </p>
 
                 <div
@@ -92,15 +81,13 @@ const submit = () => {
                     class="mt-4 grid gap-4 md:grid-cols-2"
                 >
                     <div>
-                        <label class="text-sm font-medium">
-                            Ime
-                        </label>
+                        <label class="text-sm font-medium"> Ime </label>
 
                         <input
                             v-model="form.first_name"
                             type="text"
-                            class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
-                        >
+                            class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm transition outline-none focus:border-primary dark:border-sidebar-border"
+                        />
 
                         <p
                             v-if="form.errors.first_name"
@@ -111,15 +98,13 @@ const submit = () => {
                     </div>
 
                     <div>
-                        <label class="text-sm font-medium">
-                            Prezime
-                        </label>
+                        <label class="text-sm font-medium"> Prezime </label>
 
                         <input
                             v-model="form.last_name"
                             type="text"
-                            class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
-                        >
+                            class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm transition outline-none focus:border-primary dark:border-sidebar-border"
+                        />
 
                         <p
                             v-if="form.errors.last_name"
@@ -130,15 +115,13 @@ const submit = () => {
                     </div>
 
                     <div class="md:col-span-2">
-                        <label class="text-sm font-medium">
-                            Nadimak
-                        </label>
+                        <label class="text-sm font-medium"> Nadimak </label>
 
                         <input
                             v-model="form.nickname"
                             type="text"
-                            class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
-                        >
+                            class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm transition outline-none focus:border-primary dark:border-sidebar-border"
+                        />
 
                         <p
                             v-if="form.errors.nickname"
@@ -149,19 +132,14 @@ const submit = () => {
                     </div>
                 </div>
 
-                <div
-                    v-else
-                    class="mt-4"
-                >
-                    <label class="text-sm font-medium">
-                        Naziv ekipe
-                    </label>
+                <div v-else class="mt-4">
+                    <label class="text-sm font-medium"> Naziv ekipe </label>
 
                     <input
                         v-model="form.team_name"
                         type="text"
-                        class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none transition focus:border-primary dark:border-sidebar-border"
-                    >
+                        class="mt-2 w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm transition outline-none focus:border-primary dark:border-sidebar-border"
+                    />
 
                     <p
                         v-if="form.errors.team_name"
@@ -172,31 +150,41 @@ const submit = () => {
                 </div>
             </div>
 
-            <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border xl:sticky xl:top-4 xl:self-start">
-                <h2 class="text-lg font-medium">
-                    Review
-                </h2>
+            <div
+                class="rounded-xl border border-sidebar-border/70 p-4 xl:sticky xl:top-4 xl:self-start dark:border-sidebar-border"
+            >
+                <h2 class="text-lg font-medium">Pregled</h2>
 
                 <div class="mt-4 space-y-3 text-sm">
                     <div class="flex justify-between gap-4">
                         <span class="text-muted-foreground">Turnir</span>
-                        <span class="text-right font-medium">{{ tournament.name }}</span>
+                        <span class="text-right font-medium">{{
+                            tournament.name
+                        }}</span>
                     </div>
 
                     <div class="flex justify-between gap-4">
                         <span class="text-muted-foreground">Slot</span>
-                        <span class="font-medium">{{ participant.group_position }}</span>
+                        <span class="font-medium">{{
+                            participant.group_position
+                        }}</span>
                     </div>
 
                     <div class="flex justify-between gap-4">
                         <span class="text-muted-foreground">Trenutno</span>
-                        <span class="text-right font-medium">{{ participant.display_name }}</span>
+                        <span class="text-right font-medium">{{
+                            participant.display_name
+                        }}</span>
                     </div>
 
                     <div class="flex justify-between gap-4">
                         <span class="text-muted-foreground">Tip</span>
                         <span class="font-medium">
-                            {{ participant.participant_type === 'player' ? 'Igrač' : 'Ekipa' }}
+                            {{
+                                participant.participant_type === 'player'
+                                    ? 'Igrač'
+                                    : 'Ekipa'
+                            }}
                         </span>
                     </div>
                 </div>

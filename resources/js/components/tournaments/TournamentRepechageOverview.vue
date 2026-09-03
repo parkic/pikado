@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import type {
-    TournamentRepechageData,
-} from '@/types/tournament';
+import type { TournamentRepechageData } from '@/types/tournament';
 
 defineProps<{
     tournament: TournamentRepechageData;
@@ -20,9 +18,7 @@ const emit = defineEmits<{
             <div
                 class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
             >
-                <p class="text-sm">
-                    Direktan prolaz
-                </p>
+                <p class="text-sm">Direktan prolaz</p>
 
                 <p class="mt-2 text-2xl font-semibold">
                     {{ directQualifiersCount }}
@@ -32,9 +28,7 @@ const emit = defineEmits<{
             <div
                 class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
             >
-                <p class="text-sm">
-                    Repasaž
-                </p>
+                <p class="text-sm">Repasaž</p>
 
                 <p class="mt-2 text-2xl font-semibold">
                     {{ repechageParticipantsCount }}
@@ -49,27 +43,19 @@ const emit = defineEmits<{
                 </p>
 
                 <p class="mt-2 text-2xl font-semibold">
-                    {{
-                        tournament.repechage_qualifiers_count
-                            || '-'
-                    }}
+                    {{ tournament.repechage_qualifiers_count || '-' }}
                 </p>
             </div>
 
             <div
                 class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
             >
-                <p class="text-sm text-muted-foreground">
-                    Označeno prošlo
-                </p>
+                <p class="text-sm text-muted-foreground">Označeno prošlo</p>
 
                 <p class="mt-2 text-2xl font-semibold">
                     {{ tournament.repechage_advanced_count }}
                     /
-                    {{
-                        tournament.repechage_qualifiers_count
-                            || '-'
-                    }}
+                    {{ tournament.repechage_qualifiers_count || '-' }}
                 </p>
             </div>
         </div>
@@ -78,9 +64,7 @@ const emit = defineEmits<{
             v-if="tournament.status === 'repechage'"
             class="rounded-xl border border-primary/30 bg-primary/5 p-4"
         >
-            <h2 class="text-lg font-medium">
-                Repasaž je u toku
-            </h2>
+            <h2 class="text-lg font-medium">Repasaž je u toku</h2>
 
             <p class="mt-1 text-sm text-muted-foreground">
                 Označi tačno
@@ -98,13 +82,9 @@ const emit = defineEmits<{
                 Završi repasaž
             </button>
 
-            <p
-                v-else
-                class="mt-3 text-sm text-muted-foreground"
-            >
-                Dugme za završetak će se pojaviti kada
-                označiš tačan broj učesnika koji prolaze
-                dalje.
+            <p v-else class="mt-3 text-sm text-muted-foreground">
+                Dugme za završetak će se pojaviti kada označiš tačan broj
+                učesnika koji prolaze dalje.
             </p>
         </div>
 
@@ -112,22 +92,16 @@ const emit = defineEmits<{
             v-else-if="tournament.status === 'knockout_draw'"
             class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
         >
-            <h2 class="text-lg font-medium">
-                Repasaž je završen
-            </h2>
+            <h2 class="text-lg font-medium">Repasaž je završen</h2>
 
-            <p class="mt-1 text-sm">
-                Turnir je spreman za nokaut žreb.
-            </p>
+            <p class="mt-1 text-sm">Turnir je spreman za nokaut žreb.</p>
         </div>
 
         <div
             v-if="!tournament.settings.repechage_enabled"
             class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
         >
-            <h2 class="text-lg font-medium">
-                Repasaž nije uključen
-            </h2>
+            <h2 class="text-lg font-medium">Repasaž nije uključen</h2>
 
             <p class="mt-1 text-sm">
                 Ako želiš repasaž, vrati se na podešavanje prolaza i uključi ga.

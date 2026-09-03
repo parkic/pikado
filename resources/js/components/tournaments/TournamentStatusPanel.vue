@@ -25,12 +25,11 @@ const emit = defineEmits<{
         v-if="status === 'draft'"
         class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
     >
-        <h2 class="text-lg font-medium">
-            Turnir je spreman za unos učesnika
-        </h2>
+        <h2 class="text-lg font-medium">Turnir je spreman za unos učesnika</h2>
 
         <p class="mt-1 text-sm">
-            Grupe i prolaz dalje su već podešeni. Sledeći korak je unos učesnika u slobodna mesta.
+            Grupe i prolaz dalje su već podešeni. Sledeći korak je unos učesnika
+            u slobodna mesta.
         </p>
 
         <Link
@@ -45,12 +44,11 @@ const emit = defineEmits<{
         v-else-if="status === 'group_draw'"
         class="rounded-xl border border-primary/30 bg-primary/5 p-4"
     >
-        <h2 class="text-lg font-medium">
-            Unos učesnika je u toku
-        </h2>
+        <h2 class="text-lg font-medium">Unos učesnika je u toku</h2>
 
         <p class="mt-1 text-sm text-muted-foreground">
-            Nastavi sa popunjavanjem grupa. Unos možeš završiti i pre maksimalnog kapaciteta kada su grupe ravnomerno raspoređene.
+            Nastavi sa popunjavanjem grupa. Unos možeš završiti i pre
+            maksimalnog kapaciteta kada su grupe ravnomerno raspoređene.
         </p>
 
         <Link
@@ -65,9 +63,7 @@ const emit = defineEmits<{
         v-else-if="status === 'ready'"
         class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
     >
-        <h2 class="text-lg font-medium">
-            Turnir je spreman
-        </h2>
+        <h2 class="text-lg font-medium">Turnir je spreman</h2>
 
         <p class="mt-1 text-sm">
             Grupe su popunjene. Sledeći korak je generisanje grupnih mečeva.
@@ -87,12 +83,11 @@ const emit = defineEmits<{
         v-else-if="status === 'group_stage'"
         class="rounded-xl border border-primary/30 bg-primary/5 p-4"
     >
-        <h2 class="text-lg font-medium">
-            Grupna faza je u toku
-        </h2>
+        <h2 class="text-lg font-medium">Grupna faza je u toku</h2>
 
         <p class="mt-1 text-sm text-muted-foreground">
-            Unesi rezultate svih grupnih mečeva. Kada svi mečevi budu završeni, možeš završiti grupnu fazu.
+            Unesi rezultate svih grupnih mečeva. Kada svi mečevi budu završeni,
+            možeš završiti grupnu fazu.
         </p>
 
         <div class="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -132,12 +127,11 @@ const emit = defineEmits<{
         v-else-if="status === 'repechage'"
         class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-700 dark:text-yellow-300"
     >
-        <h2 class="text-lg font-medium">
-            Turnir je u fazi repasaža
-        </h2>
+        <h2 class="text-lg font-medium">Turnir je u fazi repasaža</h2>
 
         <p class="mt-1 text-sm">
-            Grupna faza je završena. Otvori repasaž i označi učesnike koji prolaze dalje.
+            Grupna faza je završena. Otvori repasaž i označi učesnike koji
+            prolaze dalje.
         </p>
 
         <Link
@@ -152,12 +146,11 @@ const emit = defineEmits<{
         v-else-if="status === 'knockout_draw'"
         class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-emerald-700 dark:text-emerald-300"
     >
-        <h2 class="text-lg font-medium">
-            Turnir je spreman za nokaut žreb
-        </h2>
+        <h2 class="text-lg font-medium">Turnir je spreman za nokaut žreb</h2>
 
         <p class="mt-1 text-sm">
-            Grupna faza je završena. Sledeći korak je generisanje nokaut kostura.
+            Grupna faza je završena. Sledeći korak je generisanje nokaut
+            kostura.
         </p>
 
         <Link
@@ -172,12 +165,11 @@ const emit = defineEmits<{
         v-else-if="status === 'knockout_stage'"
         class="rounded-xl border border-primary/30 bg-primary/5 p-4"
     >
-        <h2 class="text-lg font-medium">
-            Nokaut faza je u toku
-        </h2>
+        <h2 class="text-lg font-medium">Nokaut faza je u toku</h2>
 
         <p class="mt-1 text-sm text-muted-foreground">
-            Nokaut kostur je generisan. Otvori raspored i unesi rezultate nokaut mečeva.
+            Nokaut kostur je generisan. Otvori raspored i unesi rezultate nokaut
+            mečeva.
         </p>
 
         <Link

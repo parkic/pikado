@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 
 import PageHeader from '@/components/shared/PageHeader.vue';
+import TournamentAdminNav from '@/components/tournaments/TournamentAdminNav.vue';
+import TournamentKnockoutDraw from '@/components/tournaments/TournamentKnockoutDraw.vue';
 import TournamentKnockoutOverview from '@/components/tournaments/TournamentKnockoutOverview.vue';
 import TournamentKnockoutParticipants from '@/components/tournaments/TournamentKnockoutParticipants.vue';
 import TournamentKnockoutSeriesList from '@/components/tournaments/TournamentKnockoutSeriesList.vue';
@@ -11,6 +13,7 @@ import { tournamentRoutes } from '@/lib/tournamentRoutes';
 
 import type {
     TournamentKnockoutData,
+    TournamentKnockoutDraw as TournamentKnockoutDrawData,
     TournamentKnockoutParticipant,
     TournamentKnockoutRound,
 } from '@/types/tournament';
@@ -23,6 +26,7 @@ const props = defineProps<{
     direct_qualifiers: TournamentKnockoutParticipant[];
     repechage_qualifiers: TournamentKnockoutParticipant[];
     knockout_participants: TournamentKnockoutParticipant[];
+    knockout_draw: TournamentKnockoutDrawData;
     knockout_series: TournamentKnockoutRound[];
 }>();
 
@@ -37,22 +41,14 @@ defineOptions({
     },
 });
 
-const routes = tournamentRoutes(
-    props.venue.slug,
-    props.tournament.slug,
-);
+const routes = tournamentRoutes(props.venue.slug, props.tournament.slug);
 
-const {
-    generateKnockoutBracket,
-    canApplyWalkover,
-    applyKnockoutWalkover,
-} = useTournamentKnockoutActions({
-    tournamentStatus: () => props.tournament.status,
-    generateBracketUrl:
-        routes.generateKnockoutBracket,
-    matchWalkoverUrl:
-        routes.knockoutMatchWalkover,
-});
+const { generateKnockoutBracket, canApplyWalkover, applyKnockoutWalkover } =
+    useTournamentKnockoutActions({
+        tournamentStatus: () => props.tournament.status,
+        generateBracketUrl: routes.generateKnockoutBracket,
+        matchWalkoverUrl: routes.knockoutMatchWalkover,
+    });
 </script>
 
 <template>
@@ -73,34 +69,27 @@ const {
                 >
                     Generiši kostur
                 </button>
-
-                <Link
-                    :href="routes.repechage"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Repasaž
-                </Link>
-
-                <Link
-                    :href="routes.standings"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Tabela
-                </Link>
-
-                <Link
-                    :href="routes.show"
-                    class="inline-flex items-center justify-center rounded-lg border border-sidebar-border/70 px-4 py-2 text-sm font-medium transition hover:bg-muted dark:border-sidebar-border"
-                >
-                    Nazad na turnir
-                </Link>
             </template>
         </PageHeader>
+
+        <TournamentAdminNav
+            active="knockout"
+            :routes="routes"
+            :status="tournament.status"
+            :repechage-enabled="tournament.repechage_enabled"
+        />
 
         <TournamentKnockoutOverview
             :tournament="tournament"
             :schedule-url="routes.schedule"
             @generate="generateKnockoutBracket"
+        />
+
+        <TournamentKnockoutDraw
+            :draw="knockout_draw"
+            :update-seeding-url="routes.updateKnockoutSeeding"
+            :draw-next-url="routes.drawNextKnockoutParticipant"
+            :reset-url="routes.resetKnockoutDraw"
         />
 
         <TournamentKnockoutSeriesList

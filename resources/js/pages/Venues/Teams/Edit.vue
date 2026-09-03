@@ -45,7 +45,9 @@ defineOptions({
     <Head :title="`Izmeni tim - ${venue.name}`" />
 
     <div class="flex h-full flex-1 flex-col gap-6 p-4">
-        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div
+            class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+        >
             <div>
                 <p class="text-sm text-muted-foreground">
                     {{ venue.name }}
@@ -74,10 +76,7 @@ defineOptions({
         >
             <div class="space-y-5">
                 <div>
-                    <label
-                        for="name"
-                        class="text-sm font-medium"
-                    >
+                    <label for="name" class="text-sm font-medium">
                         Naziv
                     </label>
 
@@ -86,7 +85,7 @@ defineOptions({
                         v-model="form.name"
                         type="text"
                         class="mt-2 w-full rounded-md border border-sidebar-border/70 bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring dark:border-sidebar-border"
-                    >
+                    />
 
                     <p
                         v-if="form.errors.name"
@@ -97,10 +96,7 @@ defineOptions({
                 </div>
 
                 <div>
-                    <label
-                        for="notes"
-                        class="text-sm font-medium"
-                    >
+                    <label for="notes" class="text-sm font-medium">
                         Napomena
                     </label>
 
@@ -124,17 +120,12 @@ defineOptions({
                         v-model="form.is_active"
                         type="checkbox"
                         class="rounded border-sidebar-border/70"
-                    >
+                    />
 
-                    <span class="text-sm font-medium">
-                        Aktivan tim
-                    </span>
+                    <span class="text-sm font-medium"> Aktivan tim </span>
                 </label>
 
-                <p
-                    v-if="form.errors.is_active"
-                    class="text-sm text-red-500"
-                >
+                <p v-if="form.errors.is_active" class="text-sm text-red-500">
                     {{ form.errors.is_active }}
                 </p>
             </div>

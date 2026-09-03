@@ -29,39 +29,36 @@ export const useTournamentPublicLinks = ({
     const publicLinks = computed<TournamentPublicLink[]>(() => [
         {
             key: 'live',
-            label: 'Live',
+            label: 'Uživo',
             description:
-                'Glavna public strana sa trenutnim, sledećim i poslednjim mečevima.',
+                'Glavna javna strana sa trenutnim, sledećim i poslednjim mečevima.',
             url: publicLiveUrl.value,
         },
         {
             key: 'groups',
             label: 'Grupe',
-            description:
-                'Tabela grupa, prolaz, repasaž i grupni mečevi.',
+            description: 'Tabela grupa, prolaz, repasaž i grupni mečevi.',
             url: `${publicBaseUrl.value}/groups`,
         },
         {
             key: 'schedule',
             label: 'Raspored',
-            description:
-                'Kompletan public raspored svih mečeva.',
+            description: 'Kompletan javni raspored svih mečeva.',
             url: `${publicBaseUrl.value}/schedule`,
         },
         {
             key: 'knockout',
             label: 'Nokaut',
-            description:
-                'Public prikaz nokaut serija, legova i pobednika.',
+            description: 'Javni prikaz nokaut serija, partija i pobednika.',
             url: `${publicBaseUrl.value}/knockout`,
         },
     ]);
 
     const generatePublicQrCode = async () => {
         if (
-            !publicEnabled()
-            || !publicLiveUrl.value
-            || typeof window === 'undefined'
+            !publicEnabled() ||
+            !publicLiveUrl.value ||
+            typeof window === 'undefined'
         ) {
             publicQrCodeDataUrl.value = null;
 

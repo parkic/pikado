@@ -11,17 +11,14 @@ const emit = defineEmits<{
     'update:selectedResourceIds': [value: number[]];
 }>();
 
-const toggleResource = (
-    resourceId: number,
-    event: Event,
-) => {
+const toggleResource = (resourceId: number, event: Event) => {
     const input = event.target as HTMLInputElement;
 
     if (input.checked) {
-        emit(
-            'update:selectedResourceIds',
-            [...props.selectedResourceIds, resourceId],
-        );
+        emit('update:selectedResourceIds', [
+            ...props.selectedResourceIds,
+            resourceId,
+        ]);
 
         return;
     }
@@ -36,19 +33,16 @@ const toggleResource = (
 </script>
 
 <template>
-    <div class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border">
-        <h2 class="text-lg font-medium">
-            Resources za turnir
-        </h2>
+    <div
+        class="rounded-xl border border-sidebar-border/70 p-4 dark:border-sidebar-border"
+    >
+        <h2 class="text-lg font-medium">Oprema za turnir</h2>
 
         <p class="mt-1 text-sm text-muted-foreground">
-            Izabrani resources će biti kopirani iz podešavanja lokala u ovaj konkretan turnir.
+            Izaberi table ili stolove koji su dostupni za ovaj turnir.
         </p>
 
-        <div
-            v-if="resources.length"
-            class="mt-4 grid gap-3 md:grid-cols-2"
-        >
+        <div v-if="resources.length" class="mt-4 grid gap-3 md:grid-cols-2">
             <label
                 v-for="resource in resources"
                 :key="resource.id"
@@ -59,7 +53,7 @@ const toggleResource = (
                     :checked="selectedResourceIds.includes(resource.id)"
                     class="mt-1"
                     @change="toggleResource(resource.id, $event)"
-                >
+                />
 
                 <span>
                     <span class="block text-sm font-medium">
@@ -67,7 +61,8 @@ const toggleResource = (
                     </span>
 
                     <span class="mt-1 block text-xs text-muted-foreground">
-                        {{ resource.type_label }} · redosled {{ resource.sort_order }}
+                        {{ resource.type_label }} · redosled
+                        {{ resource.sort_order }}
                     </span>
                 </span>
             </label>
@@ -77,13 +72,11 @@ const toggleResource = (
             v-else
             class="mt-4 rounded-lg border border-dashed border-sidebar-border/70 p-4 text-sm text-muted-foreground dark:border-sidebar-border"
         >
-            Ovaj lokal još nema aktivne resources. Turnir možeš napraviti, ali neće imati opremu dok je ne dodaš.
+            Ovaj lokal još nema aktivnu opremu. Turnir možeš napraviti, ali
+            mečevi neće imati dodeljenu tablu ili sto.
         </div>
 
-        <p
-            v-if="error"
-            class="mt-3 text-sm text-red-600"
-        >
+        <p v-if="error" class="mt-3 text-sm text-red-600">
             {{ error }}
         </p>
     </div>

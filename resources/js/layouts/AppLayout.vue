@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppConfirmDialog from '@/components/AppConfirmDialog.vue';
 import AppLayout from '@/layouts/app/AppSidebarLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -11,4 +12,5 @@ const { breadcrumbs = [] } = defineProps<{
     <AppLayout :breadcrumbs="breadcrumbs">
         <slot />
     </AppLayout>
+    <AppConfirmDialog />
 </template>

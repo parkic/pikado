@@ -1,6 +1,4 @@
-export const venueTournamentRoutes = (
-    venueSlug: string,
-) => {
+export const venueTournamentRoutes = (venueSlug: string) => {
     const venueBase = `/venues/${venueSlug}`;
     const base = `${venueBase}/tournaments`;
 
@@ -9,19 +7,16 @@ export const venueTournamentRoutes = (
         index: base,
         create: `${base}/create`,
         store: base,
-        show: (tournamentSlug: string) =>
-            `${base}/${tournamentSlug}`,
+        show: (tournamentSlug: string) => `${base}/${tournamentSlug}`,
     };
 };
 
-export const tournamentRoutes = (
-    venueSlug: string,
-    tournamentSlug: string,
-) => {
+export const tournamentRoutes = (venueSlug: string, tournamentSlug: string) => {
     const base = `/venues/${venueSlug}/tournaments/${tournamentSlug}`;
 
     return {
         show: base,
+        destroy: base,
 
         groupsSetup: `${base}/groups/setup`,
         groupDraw: `${base}/group-draw`,
@@ -41,6 +36,8 @@ export const tournamentRoutes = (
             `${base}/schedule/matches/${matchId}/resource`,
         scheduleMatchResult: (matchId: number) =>
             `${base}/schedule/matches/${matchId}/result`,
+        scheduleMatchPostponement: (matchId: number) =>
+            `${base}/schedule/matches/${matchId}/postponement`,
 
         standings: `${base}/standings`,
         standingQualificationOverride: (participantId: number) =>
@@ -59,10 +56,10 @@ export const tournamentRoutes = (
 
         knockout: `${base}/knockout`,
         generateKnockoutBracket: `${base}/knockout/generate`,
-        knockoutMatchWalkover: (
-            matchId: number,
-            participantId: number,
-        ) =>
+        updateKnockoutSeeding: `${base}/knockout/seeding`,
+        drawNextKnockoutParticipant: `${base}/knockout/draw/next`,
+        resetKnockoutDraw: `${base}/knockout/draw`,
+        knockoutMatchWalkover: (matchId: number, participantId: number) =>
             `${base}/knockout/matches/${matchId}/participants/${participantId}/walkover`,
     };
 };

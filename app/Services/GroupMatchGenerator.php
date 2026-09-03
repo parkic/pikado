@@ -38,17 +38,16 @@ class GroupMatchGenerator
         }
 
         $resources = $tournament->resources;
-        $scheduledOrder = 1;
-        $visibleMatchesCount = 0;
-
+        $resourceIdsByGroup = $this->resourceIdsByGroup(
+            $tournament,
+            $tournament->groups,
+            $resources,
+        );
         $matchesByGroup = $tournament->groups
             ->values()
-            ->mapWithKeys(function (
-                TournamentGroup $group,
-                int $groupIndex
-            ) use (
+            ->mapWithKeys(function (TournamentGroup $group) use (
                 $tournament,
-                $resources,
+                $resourceIdsByGroup,
                 $groupSize
             ) {
                 $slots = $this->slotsForGroup($group, $groupSize);
@@ -56,7 +55,7 @@ class GroupMatchGenerator
                 return [
                     $group->id => [
                         'group' => $group,
-                        'resource_id' => $this->resourceIdForGroup($resources, $groupIndex),
+                        'resource_id' => $resourceIdsByGroup->get($group->id),
                         'matches' => $this->groupMatchesForTournament($tournament, $slots),
                     ],
                 ];
@@ -66,6 +65,9 @@ class GroupMatchGenerator
             ->map(fn (array $groupData) => count($groupData['matches']))
             ->max() ?? 0;
 
+        $matchEntries = collect();
+        $originalOrder = 1;
+
         for ($matchIndex = 0; $matchIndex < $maxMatchesPerGroup; $matchIndex++) {
             foreach ($tournament->groups as $group) {
                 $groupData = $matchesByGroup->get($group->id);
@@ -74,7 +76,7 @@ class GroupMatchGenerator
                     continue;
                 }
 
-                [$slotA, $slotB, $leg] = $groupData['matches'][$matchIndex];
+                [$slotA, $slotB, $leg, $round] = $groupData['matches'][$matchIndex];
 
                 /** @var TournamentParticipant|null $participantA */
                 $participantA = $slotA['participant'];
@@ -82,33 +84,280 @@ class GroupMatchGenerator
                 /** @var TournamentParticipant|null $participantB */
                 $participantB = $slotB['participant'];
 
-                $isHidden = $participantA === null || $participantB === null;
-
-                TournamentMatch::create([
-                    'tournament_id' => $tournament->id,
-                    'stage' => MatchStage::GROUP,
-                    'tournament_group_id' => $group->id,
-                    'participant_a_id' => $participantA?->id,
-                    'participant_a_position' => $slotA['position'],
-                    'participant_b_id' => $participantB?->id,
-                    'participant_b_position' => $slotB['position'],
-                    'is_hidden' => $isHidden,
-                    'status' => MatchStatus::SCHEDULED,
-                    'tournament_resource_id' => $groupData['resource_id'],
-                    'scheduled_order' => $scheduledOrder,
-                    'round_robin_leg' => $leg,
-                    'wins_required' => 1,
+                $matchEntries->push([
+                    'group' => $group,
+                    'resource_id' => $groupData['resource_id'],
+                    'slot_a' => $slotA,
+                    'slot_b' => $slotB,
+                    'leg' => $leg,
+                    'round' => $round,
+                    'is_hidden' => $participantA === null || $participantB === null,
+                    'original_order' => $originalOrder,
                 ]);
 
-                if (! $isHidden) {
-                    $visibleMatchesCount++;
-                }
-
-                $scheduledOrder++;
+                $originalOrder++;
             }
         }
 
+        $scheduledOrder = 1;
+        $visibleMatchesCount = 0;
+
+        foreach ($this->fairMatchOrder($matchEntries, $resources) as $entry) {
+            /** @var TournamentGroup $group */
+            $group = $entry['group'];
+
+            /** @var TournamentParticipant|null $participantA */
+            $participantA = $entry['slot_a']['participant'];
+
+            /** @var TournamentParticipant|null $participantB */
+            $participantB = $entry['slot_b']['participant'];
+
+            TournamentMatch::create([
+                'tournament_id' => $tournament->id,
+                'stage' => MatchStage::GROUP,
+                'tournament_group_id' => $group->id,
+                'participant_a_id' => $participantA?->id,
+                'participant_a_position' => $entry['slot_a']['position'],
+                'participant_b_id' => $participantB?->id,
+                'participant_b_position' => $entry['slot_b']['position'],
+                'is_hidden' => $entry['is_hidden'],
+                'status' => MatchStatus::SCHEDULED,
+                'tournament_resource_id' => $entry['resource_id'],
+                'scheduled_order' => $scheduledOrder,
+                'round_robin_leg' => $entry['leg'],
+                'wins_required' => 1,
+            ]);
+
+            if (! $entry['is_hidden']) {
+                $visibleMatchesCount++;
+            }
+
+            $scheduledOrder++;
+        }
+
         return $visibleMatchesCount;
+    }
+
+    /**
+     * Pravi fer redosled bez menjanja parova ili table kojoj grupa pripada.
+     * Svaka tabla dobija svoj red, a zatim se redovi tabli prepliću kako bi
+     * i globalni raspored ostao pregledan. Skriveni mečevi za prazne slotove
+     * ostaju sačuvani, ali ne utiču na redosled stvarnih učesnika.
+     *
+     * @param  Collection<int, array{
+     *     group: TournamentGroup,
+     *     resource_id: int|null,
+     *     slot_a: array{position: string, participant: TournamentParticipant|null},
+     *     slot_b: array{position: string, participant: TournamentParticipant|null},
+     *     leg: int,
+     *     round: int,
+     *     is_hidden: bool,
+     *     original_order: int
+     * }>  $entries
+     * @param  Collection<int, TournamentResource>  $resources
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function fairMatchOrder(Collection $entries, Collection $resources): Collection
+    {
+        if ($entries->isEmpty()) {
+            return collect();
+        }
+
+        $resourceKeys = $resources
+            ->map(fn (TournamentResource $resource): string => 'resource-'.$resource->id)
+            ->filter(fn (string $key): bool => $entries->contains(
+                fn (array $entry): bool => $this->resourceKey($entry['resource_id']) === $key,
+            ))
+            ->values();
+
+        if ($entries->contains(fn (array $entry): bool => $entry['resource_id'] === null)) {
+            $resourceKeys->push('unassigned');
+        }
+
+        $queues = $resourceKeys->mapWithKeys(function (string $resourceKey) use ($entries): array {
+            $resourceEntries = $entries
+                ->filter(fn (array $entry): bool => $this->resourceKey($entry['resource_id']) === $resourceKey)
+                ->values();
+
+            return [$resourceKey => $this->fairResourceOrder($resourceEntries)->all()];
+        });
+
+        $ordered = collect();
+        $maximumQueueLength = $queues
+            ->map(fn (array $queue): int => count($queue))
+            ->max() ?? 0;
+
+        for ($index = 0; $index < $maximumQueueLength; $index++) {
+            foreach ($resourceKeys as $resourceKey) {
+                $queue = $queues->get($resourceKey, []);
+
+                if (isset($queue[$index])) {
+                    $ordered->push($queue[$index]);
+                }
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $entries
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function fairResourceOrder(Collection $entries): Collection
+    {
+        $ordered = collect();
+        $playedCount = [];
+        $lastPlayedAt = [];
+        $previousParticipantIds = [];
+        $groupScheduledCount = [];
+        $sequenceIndex = 0;
+        $legs = $entries->pluck('leg')->unique()->sort()->values();
+
+        foreach ($legs as $leg) {
+            $legEntries = $entries
+                ->where('leg', $leg)
+                ->sortBy('original_order')
+                ->values();
+            $remaining = $legEntries
+                ->where('is_hidden', false)
+                ->values();
+            $hidden = $legEntries
+                ->where('is_hidden', true)
+                ->values();
+            $groupsWithHiddenMatches = $hidden
+                ->map(fn (array $entry): int => $entry['group']->id)
+                ->unique();
+            $groupTotals = $remaining
+                ->countBy(fn (array $entry): int => $entry['group']->id)
+                ->all();
+
+            while ($remaining->isNotEmpty()) {
+                $bestIndex = 0;
+                $bestScore = null;
+                $minimumRoundByGroup = $remaining
+                    ->groupBy(fn (array $entry): int => $entry['group']->id)
+                    ->map(fn (Collection $groupEntries): int => (int) $groupEntries->min('round'));
+
+                foreach ($remaining as $index => $entry) {
+                    if (
+                        ! $groupsWithHiddenMatches->contains($entry['group']->id)
+                        && $entry['round'] !== $minimumRoundByGroup->get($entry['group']->id)
+                    ) {
+                        continue;
+                    }
+
+                    $score = $this->fairnessScore(
+                        $entry,
+                        $playedCount,
+                        $lastPlayedAt,
+                        $previousParticipantIds,
+                        $groupScheduledCount,
+                        $groupTotals,
+                    );
+
+                    if ($bestScore === null || $this->compareScores($score, $bestScore) < 0) {
+                        $bestIndex = $index;
+                        $bestScore = $score;
+                    }
+                }
+
+                $selected = $remaining->get($bestIndex);
+                $remaining->forget($bestIndex);
+                $remaining = $remaining->values();
+                $participantIds = $this->participantIds($selected);
+
+                $ordered->push($selected);
+                $groupId = $selected['group']->id;
+                $groupScheduledCount[$groupId] = ($groupScheduledCount[$groupId] ?? 0) + 1;
+
+                foreach ($participantIds as $participantId) {
+                    $playedCount[$participantId] = ($playedCount[$participantId] ?? 0) + 1;
+                    $lastPlayedAt[$participantId] = $sequenceIndex;
+                }
+
+                $previousParticipantIds = $participantIds;
+                $sequenceIndex++;
+            }
+
+            foreach ($hidden as $entry) {
+                $ordered->push($entry);
+            }
+        }
+
+        return $ordered;
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     * @param  array<int, int>  $playedCount
+     * @param  array<int, int>  $lastPlayedAt
+     * @param  array<int, int>  $previousParticipantIds
+     * @param  array<int, int>  $groupScheduledCount
+     * @param  array<int, int>  $groupTotals
+     * @return array<int, int|float>
+     */
+    private function fairnessScore(
+        array $entry,
+        array $playedCount,
+        array $lastPlayedAt,
+        array $previousParticipantIds,
+        array $groupScheduledCount,
+        array $groupTotals,
+    ): array {
+        $participantIds = $this->participantIds($entry);
+        $counts = array_map(
+            fn (int $participantId): int => $playedCount[$participantId] ?? 0,
+            $participantIds,
+        );
+        $lastPlayed = array_map(
+            fn (int $participantId): int => $lastPlayedAt[$participantId] ?? -1_000_000,
+            $participantIds,
+        );
+        $groupId = $entry['group']->id;
+        $groupProgress = ($groupScheduledCount[$groupId] ?? 0)
+            / max(1, $groupTotals[$groupId] ?? 1);
+
+        return [
+            count(array_intersect($participantIds, $previousParticipantIds)) > 0 ? 1 : 0,
+            $groupProgress,
+            min($lastPlayed),
+            max($lastPlayed),
+            max($counts),
+            array_sum($counts),
+            $entry['original_order'],
+        ];
+    }
+
+    /** @param array<string, mixed> $entry @return array<int, int> */
+    private function participantIds(array $entry): array
+    {
+        return collect([
+            $entry['slot_a']['participant']?->id,
+            $entry['slot_b']['participant']?->id,
+        ])->filter()->map(fn (int $id): int => $id)->values()->all();
+    }
+
+    /**
+     * @param  array<int, int|float>  $left
+     * @param  array<int, int|float>  $right
+     */
+    private function compareScores(array $left, array $right): int
+    {
+        foreach ($left as $index => $value) {
+            $comparison = $value <=> $right[$index];
+
+            if ($comparison !== 0) {
+                return $comparison;
+            }
+        }
+
+        return 0;
+    }
+
+    private function resourceKey(?int $resourceId): string
+    {
+        return $resourceId === null ? 'unassigned' : 'resource-'.$resourceId;
     }
 
     public function generateForParticipant(
@@ -214,15 +463,12 @@ class GroupMatchGenerator
         * nijedan meč sa dodeljenim resursom.
         */
         if ($resourceId === null) {
-            $orderedGroupIds = $tournament->groups()
+            $groups = $tournament->groups()
+                ->with(['participants' => fn ($query) => $query
+                    ->where('status', ParticipantStatus::ACTIVE->value)])
                 ->orderBy('sort_order')
                 ->orderBy('name')
-                ->pluck('id')
-                ->values();
-
-            $groupIndex = $orderedGroupIds->search(
-                $group->id,
-            );
+                ->get();
 
             $resources = $tournament->resources()
                 ->where('is_active', true)
@@ -230,26 +476,25 @@ class GroupMatchGenerator
                 ->orderBy('name')
                 ->get();
 
-            $resourceId = $this->resourceIdForGroup(
+            $resourceId = $this->resourceIdsByGroup(
+                $tournament,
+                $groups,
                 $resources,
-                $groupIndex === false
-                    ? 0
-                    : (int) $groupIndex,
-            );
+            )->get($group->id);
         }
 
         $scheduledOrder = (
             (int) (
                 TournamentMatch::withoutGlobalScope('visible_matches')
-                ->where(
-                    'tournament_id',
-                    $tournament->id,
-                )
-                ->where(
-                    'stage',
-                    MatchStage::GROUP->value,
-                )
-                ->max('scheduled_order')
+                    ->where(
+                        'tournament_id',
+                        $tournament->id,
+                    )
+                    ->where(
+                        'stage',
+                        MatchStage::GROUP->value,
+                    )
+                    ->max('scheduled_order')
                 ?? 0
             )
         ) + 1;
@@ -277,61 +522,61 @@ class GroupMatchGenerator
                 */
                 $matchAlreadyExists =
                     TournamentMatch::query()
-                    ->where(
-                        'tournament_id',
-                        $tournament->id,
-                    )
-                    ->where(
-                        'stage',
-                        MatchStage::GROUP->value,
-                    )
-                    ->where(
-                        'tournament_group_id',
-                        $group->id,
-                    )
-                    ->where(
-                        'round_robin_leg',
-                        $leg,
-                    )
-                    ->where(function ($query) use (
-                        $participantA,
-                        $participantB,
-                    ): void {
-                        $query
-                            ->where(function (
-                                $pairQuery
-                            ) use (
-                                $participantA,
-                                $participantB,
-                            ): void {
-                                $pairQuery
-                                    ->where(
-                                        'participant_a_id',
-                                        $participantA->id,
-                                    )
-                                    ->where(
-                                        'participant_b_id',
-                                        $participantB->id,
-                                    );
-                            })
-                            ->orWhere(function (
-                                $pairQuery
-                            ) use (
-                                $participantA,
-                                $participantB,
-                            ): void {
-                                $pairQuery
-                                    ->where(
-                                        'participant_a_id',
-                                        $participantB->id,
-                                    )
-                                    ->where(
-                                        'participant_b_id',
-                                        $participantA->id,
-                                    );
-                            });
-                    })
-                    ->exists();
+                        ->where(
+                            'tournament_id',
+                            $tournament->id,
+                        )
+                        ->where(
+                            'stage',
+                            MatchStage::GROUP->value,
+                        )
+                        ->where(
+                            'tournament_group_id',
+                            $group->id,
+                        )
+                        ->where(
+                            'round_robin_leg',
+                            $leg,
+                        )
+                        ->where(function ($query) use (
+                            $participantA,
+                            $participantB,
+                        ): void {
+                            $query
+                                ->where(function (
+                                    $pairQuery
+                                ) use (
+                                    $participantA,
+                                    $participantB,
+                                ): void {
+                                    $pairQuery
+                                        ->where(
+                                            'participant_a_id',
+                                            $participantA->id,
+                                        )
+                                        ->where(
+                                            'participant_b_id',
+                                            $participantB->id,
+                                        );
+                                })
+                                ->orWhere(function (
+                                    $pairQuery
+                                ) use (
+                                    $participantA,
+                                    $participantB,
+                                ): void {
+                                    $pairQuery
+                                        ->where(
+                                            'participant_a_id',
+                                            $participantB->id,
+                                        )
+                                        ->where(
+                                            'participant_b_id',
+                                            $participantA->id,
+                                        );
+                                });
+                        })
+                        ->exists();
 
                 if ($matchAlreadyExists) {
                     continue;
@@ -378,7 +623,7 @@ class GroupMatchGenerator
                 $group,
                 $participantsByPosition
             ): array {
-                $position = $group->name . $slotNumber;
+                $position = $group->name.$slotNumber;
 
                 return [
                     'position' => $position,
@@ -396,14 +641,14 @@ class GroupMatchGenerator
     private function groupMatchesForTournament(Tournament $tournament, Collection $participants): array
     {
         $firstLegMatches = $this->roundRobinMatches($participants)
-            ->map(fn(array $match) => [$match[0], $match[1], 1]);
+            ->map(fn (array $match) => [$match[0], $match[1], 1, $match[2]]);
 
         if ($tournament->group_rounds !== GroupRounds::DOUBLE) {
             return $firstLegMatches->values()->all();
         }
 
         $secondLegMatches = $firstLegMatches
-            ->map(fn(array $match) => [$match[1], $match[0], 2]);
+            ->map(fn (array $match) => [$match[1], $match[0], 2, $match[3]]);
 
         return $firstLegMatches
             ->concat($secondLegMatches)
@@ -412,8 +657,8 @@ class GroupMatchGenerator
     }
 
     /**
-     * @param Collection<int, mixed> $participants
-     * @return Collection<int, array{0: mixed, 1: mixed}>
+     * @param  Collection<int, mixed>  $participants
+     * @return Collection<int, array{0: mixed, 1: mixed, 2: int}>
      */
     private function roundRobinMatches(Collection $participants): Collection
     {
@@ -438,7 +683,7 @@ class GroupMatchGenerator
                 $participantB = $players[$playerCount - 1 - $i];
 
                 if ($participantA !== null && $participantB !== null) {
-                    $matches->push([$participantA, $participantB]);
+                    $matches->push([$participantA, $participantB, $round + 1]);
                 }
             }
 
@@ -452,15 +697,95 @@ class GroupMatchGenerator
         return $matches;
     }
 
-    private function resourceIdForGroup(Collection $resources, int $groupIndex): ?int
-    {
-        if ($resources->isEmpty()) {
-            return null;
+    /**
+     * Dodeljuje cele, susedne grupe resursima tako da procenjeni broj
+     * vidljivih mečeva bude što ravnomerniji. Time se izbegava da kod
+     * neparnog broja grupa A/C/E završe na istoj tabli.
+     *
+     * @param  Collection<int, TournamentGroup>  $groups
+     * @param  Collection<int, TournamentResource>  $resources
+     * @return Collection<int, int|null>
+     */
+    private function resourceIdsByGroup(
+        Tournament $tournament,
+        Collection $groups,
+        Collection $resources
+    ): Collection {
+        $groups = $groups->values();
+        $resources = $resources->values();
+
+        if ($groups->isEmpty()) {
+            return collect();
         }
 
-        /** @var TournamentResource $resource */
-        $resource = $resources[$groupIndex % $resources->count()];
+        if ($resources->isEmpty()) {
+            return $groups->mapWithKeys(
+                fn (TournamentGroup $group): array => [$group->id => null],
+            );
+        }
 
-        return $resource->id;
+        $legs = $tournament->group_rounds === GroupRounds::DOUBLE ? 2 : 1;
+        $weights = $groups->map(function (TournamentGroup $group) use ($legs): int {
+            $participantCount = $group->participants->count();
+            $visibleMatches = intdiv(
+                $participantCount * max(0, $participantCount - 1),
+                2,
+            ) * $legs;
+
+            return max(1, $visibleMatches);
+        })->values();
+
+        $assignments = collect();
+        $groupOffset = 0;
+        $remainingWeight = $weights->sum();
+        $resourceCount = min($resources->count(), $groups->count());
+
+        for ($resourceIndex = 0; $resourceIndex < $resourceCount; $resourceIndex++) {
+            /** @var TournamentResource $resource */
+            $resource = $resources[$resourceIndex];
+            $remainingResources = $resourceCount - $resourceIndex;
+            $remainingGroups = $groups->count() - $groupOffset;
+            $groupsToKeep = $remainingResources - 1;
+            $maximumGroupsForResource = $remainingGroups - $groupsToKeep;
+
+            if ($remainingResources === 1) {
+                $groupsForResource = $maximumGroupsForResource;
+            } else {
+                $targetWeight = $remainingWeight / $remainingResources;
+                $groupsForResource = 0;
+                $assignedWeight = 0;
+
+                while ($groupsForResource < $maximumGroupsForResource) {
+                    $nextWeight = $weights[$groupOffset + $groupsForResource];
+
+                    if (
+                        $groupsForResource > 0
+                        && abs($assignedWeight - $targetWeight)
+                            <= abs(($assignedWeight + $nextWeight) - $targetWeight)
+                    ) {
+                        break;
+                    }
+
+                    $assignedWeight += $nextWeight;
+                    $groupsForResource++;
+                }
+
+                $groupsForResource = max(1, $groupsForResource);
+            }
+
+            $assignedWeight = 0;
+
+            for ($index = 0; $index < $groupsForResource; $index++) {
+                /** @var TournamentGroup $group */
+                $group = $groups[$groupOffset + $index];
+                $assignments->put($group->id, $resource->id);
+                $assignedWeight += $weights[$groupOffset + $index];
+            }
+
+            $groupOffset += $groupsForResource;
+            $remainingWeight -= $assignedWeight;
+        }
+
+        return $assignments;
     }
 }

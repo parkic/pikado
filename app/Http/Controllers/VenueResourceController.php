@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ResourceType;
 use App\Models\Venue;
+use App\Models\VenueResource;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-
-use App\Enums\ResourceType;
-use App\Models\VenueResource;
 
 class VenueResourceController extends Controller
 {
@@ -26,6 +25,7 @@ class VenueResourceController extends Controller
                 'id' => $resource->id,
                 'name' => $resource->name,
                 'type' => $resource->type->value,
+                'type_label' => $this->resourceTypeLabel($resource->type),
                 'sort_order' => $resource->sort_order,
                 'is_active' => $resource->is_active,
             ]);
@@ -54,7 +54,7 @@ class VenueResourceController extends Controller
             ],
             'resourceTypes' => collect(ResourceType::cases())
                 ->map(fn ($type) => [
-                    'label' => $type->value,
+                    'label' => $this->resourceTypeLabel($type),
                     'value' => $type->value,
                 ]),
         ]);
@@ -82,7 +82,7 @@ class VenueResourceController extends Controller
 
         return redirect()
             ->route('venues.resources.index', ['venue' => $venue->slug])
-            ->with('success', 'Resource je uspešno dodat.');
+            ->with('success', 'Oprema je uspešno dodata.');
     }
 
     public function edit(Request $request, Venue $venue, VenueResource $resource): Response
@@ -107,7 +107,7 @@ class VenueResourceController extends Controller
             ],
             'resourceTypes' => collect(ResourceType::cases())
                 ->map(fn ($type) => [
-                    'label' => $type->value,
+                    'label' => $this->resourceTypeLabel($type),
                     'value' => $type->value,
                 ]),
         ]);
@@ -136,7 +136,7 @@ class VenueResourceController extends Controller
 
         return redirect()
             ->route('venues.resources.index', ['venue' => $venue->slug])
-            ->with('success', 'Resource je uspešno izmenjen.');
+            ->with('success', 'Oprema je uspešno izmenjena.');
     }
 
     public function destroy(Request $request, Venue $venue, VenueResource $resource)
@@ -150,6 +150,15 @@ class VenueResourceController extends Controller
 
         return redirect()
             ->route('venues.resources.index', ['venue' => $venue->slug])
-            ->with('success', 'Resource je uspešno obrisan.');
+            ->with('success', 'Oprema je uspešno obrisana.');
+    }
+
+    private function resourceTypeLabel(ResourceType $type): string
+    {
+        return match ($type) {
+            ResourceType::DART_BOARD => 'Pikado tabla',
+            ResourceType::BEER_PONG_TABLE => 'Beer pong sto',
+            ResourceType::OTHER => 'Ostalo',
+        };
     }
 }
